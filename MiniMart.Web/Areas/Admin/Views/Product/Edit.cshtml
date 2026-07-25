@@ -6,8 +6,12 @@
 <h2>Sửa sản phẩm</h2>
 
 <div class="col-md-6">
-    <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        @* Đường dẫn ảnh cũ phải đi vòng qua form, nếu không POST sẽ không biết
+           ảnh hiện tại là gì để dọn file cũ sau khi thay ảnh. *@
+        <input type="hidden" asp-for="ExistingImageUrl" />
 
         <div class="mb-3">
             <label asp-for="Name" class="form-label"></label>
@@ -33,6 +37,19 @@
             <label asp-for="Stock" class="form-label"></label>
             <input asp-for="Stock" class="form-control" />
             <span asp-validation-for="Stock" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="ImageFile" class="form-label"></label>
+            @if (!string.IsNullOrEmpty(Model.ExistingImageUrl))
+            {
+                <div class="mb-2">
+                    <img src="@Model.ExistingImageUrl" alt="Ảnh hiện tại" style="max-height: 120px;" class="img-thumbnail" />
+                </div>
+            }
+            <input asp-for="ImageFile" type="file" class="form-control" accept="image/*" />
+            <span asp-validation-for="ImageFile" class="text-danger"></span>
+            <div class="form-text">Bỏ trống nếu muốn giữ ảnh hiện tại.</div>
         </div>
 
         <button type="submit" class="btn btn-primary">Lưu</button>

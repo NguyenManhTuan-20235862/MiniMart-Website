@@ -19,6 +19,10 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.Price)
             .HasPrecision(18, 2);
 
+        // Nullable: sản phẩm chưa có ảnh là hợp lệ.
+        builder.Property(p => p.ImageUrl)
+            .HasMaxLength(260);
+
         // IsRowVersion() = IsConcurrencyToken() + ValueGeneratedOnAddOrUpdate().
         // SQL Server sinh kiểu cột "rowversion", tự tăng mỗi lần UPDATE.
         builder.Property(p => p.RowVersion)

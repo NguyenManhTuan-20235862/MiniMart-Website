@@ -5,6 +5,7 @@ using MiniMart.Application.Interfaces;
 using MiniMart.Common.Exceptions;
 using MiniMart.Domain.Entities;
 using MiniMart.Web.Areas.Admin.Models;
+using MiniMart.Web.Services;
 
 namespace MiniMart.Web.Areas.Admin.Controllers;
 
@@ -14,11 +15,16 @@ public class ProductController : Controller
 {
     private readonly IProductService _productService;
     private readonly ICategoryService _categoryService;
+    private readonly IProductImageStorage _imageStorage;
 
-    public ProductController(IProductService productService, ICategoryService categoryService)
+    public ProductController(
+        IProductService productService,
+        ICategoryService categoryService,
+        IProductImageStorage imageStorage)
     {
         _productService = productService;
         _categoryService = categoryService;
+        _imageStorage = imageStorage;
     }
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
@@ -48,10 +54,15 @@ public class ProductController : Controller
             return View(model);
         }
 
+        // Lưu file TRƯỚC khi gọi Service: nếu Service ném exception, file thừa
+        // nằm lại trên đĩa nhưng không có bản ghi nào trỏ tới - chấp nhận được.
+        // Ngược lại (lưu DB trước) sẽ có bản ghi trỏ tới file không tồn tại.
+        var imageUrl = await LuuAnhNeuCoAsync(model.ImageFile, cancellationToken);
+
         try
         {
             await _productService.CreateAsync(
-                model.Name, model.Price, model.Stock, model.CategoryId, cancellationToken);
+                model.Name, model.Price, model.Stock, model.CategoryId, imageUrl, cancellationToken);
         }
         catch (NotFoundException ex) when (ex.EntityName == nameof(Category))
         {
@@ -83,6 +94,7 @@ public class ProductController : Controller
             Price = product.Price,
             Stock = product.Stock,
             CategoryId = product.CategoryId,
+            ExistingImageUrl = product.ImageUrl,
             Categories = await LayDanhSachDanhMucAsync(cancellationToken)
         });
     }
@@ -97,10 +109,19 @@ public class ProductController : Controller
             return View(model);
         }
 
+        // null = không chọn ảnh mới -> Service giữ nguyên ảnh cũ.
+        var imageUrl = await LuuAnhNeuCoAsync(model.ImageFile, cancellationToken);
+
         try
         {
             await _productService.UpdateAsync(
-                id, model.Name, model.Price, model.Stock, model.CategoryId, cancellationToken);
+                id, model.Name, model.Price, model.Stock, model.CategoryId, imageUrl, cancellationToken);
+
+            // Thay ảnh thành công thì dọn file cũ, tránh rác tích tụ trong wwwroot.
+            if (imageUrl is not null && model.ExistingImageUrl != imageUrl)
+            {
+                _imageStorage.Delete(model.ExistingImageUrl);
+            }
         }
         catch (NotFoundException ex) when (ex.EntityName == nameof(Category))
         {
@@ -136,6 +157,9 @@ public class ProductController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteConfirmed(int id, CancellationToken cancellationToken)
     {
+        // Lấy đường dẫn ảnh TRƯỚC khi xoá bản ghi, sau đó không còn tra được nữa.
+        var product = await _productService.GetByIdAsync(id, cancellationToken);
+
         try
         {
             await _productService.DeleteAsync(id, cancellationToken);
@@ -145,8 +169,23 @@ public class ProductController : Controller
             return NotFound();
         }
 
+        // Chỉ xoá file khi DB đã xoá xong. Làm ngược lại mà DB lỗi thì bản ghi
+        // còn nguyên nhưng ảnh đã mất.
+        _imageStorage.Delete(product?.ImageUrl);
+
         TempData["Success"] = "Đã xoá sản phẩm.";
         return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>Trả về null khi người dùng không chọn file — Service hiểu là giữ ảnh cũ.</summary>
+    private async Task<string?> LuuAnhNeuCoAsync(IFormFile? file, CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return null;
+        }
+
+        return await _imageStorage.SaveAsync(file, cancellationToken);
     }
 
     private async Task<IEnumerable<SelectListItem>> LayDanhSachDanhMucAsync(

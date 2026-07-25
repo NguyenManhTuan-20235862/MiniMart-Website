@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using MiniMart.Web.Validation;
 
 namespace MiniMart.Web.Areas.Admin.Models;
 
@@ -37,6 +38,13 @@ public class ProductFormViewModel
     [Range(1, int.MaxValue, ErrorMessage = "Vui lòng chọn danh mục.")]
     [Display(Name = "Danh mục")]
     public int CategoryId { get; set; }
+
+    [ImageFile(MaxSizeInMb = 2)]
+    [Display(Name = "Ảnh sản phẩm")]
+    public IFormFile? ImageFile { get; set; }
+
+    /// <summary>Ảnh đang có, để form Edit hiển thị và giữ lại khi không chọn ảnh mới.</summary>
+    public string? ExistingImageUrl { get; set; }
 
     /// <summary>Chỉ phục vụ hiển thị dropdown, không phải dữ liệu người dùng gửi lên.</summary>
     public IEnumerable<SelectListItem> Categories { get; set; } = [];

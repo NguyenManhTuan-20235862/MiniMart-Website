@@ -82,6 +82,21 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
 - Area Admin: controller đặt tên `ProductController`, KHÔNG phải `AdminProductController`
   (Area đã cung cấp tiền tố `/Admin/`). Route area phải đăng ký trước route default.
 
+### Upload file
+- **Tên file luôn do server sinh** (`Guid.NewGuid()` + phần mở rộng). TUYỆT ĐỐI không
+  dùng `file.FileName` làm tên lưu: mở đường cho path traversal và ghi đè lẫn nhau.
+- Whitelist phần mở rộng (`.jpg .jpeg .png .webp`) và giới hạn dung lượng bằng
+  **Data Annotation** — đây là ràng buộc tĩnh nên annotation dùng đúng chỗ.
+- DB chỉ lưu **đường dẫn tương đối**; file nằm trong `wwwroot`. Thư mục upload
+  đã được `.gitignore`.
+- Form có `input type="file"` BẮT BUỘC có `enctype="multipart/form-data"`.
+  Thiếu nó thì `IFormFile` luôn null và không có lỗi nào báo.
+- Trong luồng sửa, `imageUrl = null` nghĩa là **giữ ảnh cũ**, không phải xoá ảnh.
+- Thứ tự ghi/xoá: lưu file TRƯỚC khi gọi Service (lỗi thì chỉ dư file rác),
+  nhưng xoá file SAU khi DB xoá xong (lỗi thì bản ghi vẫn còn ảnh).
+- Service lưu trữ file thuộc tầng Web (phụ thuộc `IWebHostEnvironment`), đăng ký
+  trực tiếp trong `Program.cs`, không nằm trong `AddApplication`/`AddInfrastructure`.
+
 ## Quy ước Authentication / Authorization
 - Cookie Authentication, scheme mặc định là `CookieAuthenticationDefaults.AuthenticationScheme`.
 - `app.UseAuthentication()` BẮT BUỘC đứng trước `app.UseAuthorization()`.

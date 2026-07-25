@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using MiniMart.Application;
 using MiniMart.Infrastructure;
+using MiniMart.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +11,10 @@ builder.Services.AddControllersWithViews();
 // Composition Root: nơi duy nhất được biết class implementation cụ thể.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Lưu trữ file là khái niệm của tầng Web (wwwroot) nên đăng ký tại đây,
+// không nằm trong AddApplication/AddInfrastructure.
+builder.Services.AddScoped<IProductImageStorage, WebRootProductImageStorage>();
 
 // Cookie Authentication: đặt Cookie làm scheme mặc định, nên [Authorize] không
 // tham số sẽ dùng scheme này.

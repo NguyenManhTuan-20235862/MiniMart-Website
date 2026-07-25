@@ -17,6 +17,7 @@ else
     <table class="table table-striped">
         <thead>
             <tr>
+                <th style="width: 80px;">Ảnh</th>
                 <th>Tên sản phẩm</th>
                 <th>Danh mục</th>
                 <th class="text-end">Giá</th>
@@ -28,6 +29,16 @@ else
             @foreach (var product in Model)
             {
                 <tr>
+                    <td>
+                        @if (string.IsNullOrEmpty(product.ImageUrl))
+                        {
+                            <span class="text-muted small">—</span>
+                        }
+                        else
+                        {
+                            <img src="@product.ImageUrl" alt="@product.Name" style="max-height: 48px;" class="img-thumbnail" />
+                        }
+                    </td>
                     <td>@product.Name</td>
                     @* Đọc được Category.Name là nhờ Include trong repository.
                        Thiếu Include thì dòng này ném NullReferenceException. *@

@@ -11,6 +11,12 @@ public class Product
 
     public int Stock { get; set; }
 
+    /// <summary>
+    /// Đường dẫn tương đối tới ảnh, ví dụ "/images/products/abc.jpg".
+    /// DB chỉ lưu đường dẫn; file thật nằm trong wwwroot. Null = chưa có ảnh.
+    /// </summary>
+    public string? ImageUrl { get; set; }
+
     // Khoá ngoại tường minh. Có sẵn property này thì gán CategoryId trực tiếp
     // được mà không cần load cả object Category từ DB.
     public int CategoryId { get; set; }

@@ -39,6 +39,7 @@ public class ProductService : IProductService
         decimal price,
         int stock,
         int categoryId,
+        string? imageUrl = null,
         CancellationToken cancellationToken = default)
     {
         await BaoDamDanhMucTonTaiAsync(categoryId, cancellationToken);
@@ -48,7 +49,8 @@ public class ProductService : IProductService
             Name = name.Trim(),
             Price = price,
             Stock = stock,
-            CategoryId = categoryId
+            CategoryId = categoryId,
+            ImageUrl = imageUrl
         };
 
         await _productRepository.AddAsync(product, cancellationToken);
@@ -63,6 +65,7 @@ public class ProductService : IProductService
         decimal price,
         int stock,
         int categoryId,
+        string? imageUrl = null,
         CancellationToken cancellationToken = default)
     {
         // GetForUpdateAsync (có tracking) chứ không phải GetByIdAsync: entity
@@ -77,6 +80,13 @@ public class ProductService : IProductService
         product.Price = price;
         product.Stock = stock;
         product.CategoryId = categoryId;
+
+        // Chỉ ghi đè khi có ảnh mới. imageUrl = null nghĩa là người dùng không
+        // chọn file, phải GIỮ ảnh cũ chứ không phải xoá nó.
+        if (imageUrl is not null)
+        {
+            product.ImageUrl = imageUrl;
+        }
 
         // Xung đột RowVersion sẽ ném DbUpdateConcurrencyException từ đây.
         // Chưa bắt: cách xử lý thuộc phase Concurrency.

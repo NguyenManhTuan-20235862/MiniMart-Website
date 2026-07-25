@@ -97,6 +97,46 @@ public class ProductServiceTests
     }
 
     [Fact]
+    public async Task UpdateAsync_khong_chon_anh_moi_thi_GIU_anh_cu()
+    {
+        var product = new Product
+        {
+            Id = 1, Name = "Cu", Price = 1m, Stock = 1, CategoryId = 1,
+            ImageUrl = "/images/products/cu.jpg"
+        };
+        _productRepository
+            .Setup(r => r.GetForUpdateAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(product);
+        GiaSuTonTaiDanhMuc(1);
+        var sut = CreateSut();
+
+        await sut.UpdateAsync(1, "Moi", 200m, 7, categoryId: 1, imageUrl: null);
+
+        // imageUrl = null nghĩa là "không chọn file mới", KHÔNG phải "xoá ảnh".
+        // Hiểu sai chỗ này thì mỗi lần sửa giá là mất ảnh sản phẩm.
+        Assert.Equal("/images/products/cu.jpg", product.ImageUrl);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_co_anh_moi_thi_ghi_de()
+    {
+        var product = new Product
+        {
+            Id = 1, Name = "Cu", Price = 1m, Stock = 1, CategoryId = 1,
+            ImageUrl = "/images/products/cu.jpg"
+        };
+        _productRepository
+            .Setup(r => r.GetForUpdateAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(product);
+        GiaSuTonTaiDanhMuc(1);
+        var sut = CreateSut();
+
+        await sut.UpdateAsync(1, "Moi", 200m, 7, 1, imageUrl: "/images/products/moi.jpg");
+
+        Assert.Equal("/images/products/moi.jpg", product.ImageUrl);
+    }
+
+    [Fact]
     public async Task DeleteAsync_khong_tim_thay_thi_nem_NotFound()
     {
         _productRepository
