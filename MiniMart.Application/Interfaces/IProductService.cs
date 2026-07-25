@@ -1,9 +1,24 @@
+using MiniMart.Common;
 using MiniMart.Domain.Entities;
 
 namespace MiniMart.Application.Interfaces;
 
 public interface IProductService
 {
+    /// <summary>
+    /// Danh sách sản phẩm cho trang khách hàng: có lọc và phân trang.
+    /// Hiện là pass-through xuống Repository, nhưng vẫn phải đi qua Service vì
+    /// đây là chỗ các quy tắc nghiệp vụ sẽ được thêm vào (ẩn sản phẩm hết hàng,
+    /// giá theo nhóm khách...) mà không phải sửa Controller.
+    /// </summary>
+    Task<PagedResult<Product>> GetProductsAsync(
+        int? categoryId = null,
+        decimal? minPrice = null,
+        decimal? maxPrice = null,
+        int page = 1,
+        int pageSize = 12,
+        CancellationToken cancellationToken = default);
+
     Task<List<Product>> GetAllAsync(CancellationToken cancellationToken = default);
 
     Task<List<Product>> GetByCategoryAsync(int categoryId, CancellationToken cancellationToken = default);

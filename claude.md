@@ -100,6 +100,20 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
 - Area Admin: controller đặt tên `ProductController`, KHÔNG phải `AdminProductController`
   (Area đã cung cấp tiền tố `/Admin/`). Route area phải đăng ký trước route default.
 
+### Endpoint trả JSON
+- Action trả JSON **BẮT BUỘC** dùng DTO riêng, TUYỆT ĐỐI không trả thẳng entity.
+  Lý do cứng: `Product.Category` ↔ `Category.Products` tạo vòng lặp tham chiếu,
+  `System.Text.Json` ném `JsonException: A possible object cycle was detected` → HTTP 500.
+  Lỗi này CÓ ĐIỀU KIỆN (chỉ xảy ra khi navigation được nạp), nên một `Include`
+  thêm vào sau này có thể làm sập endpoint đang chạy tốt.
+- Hai lý do còn lại: không lộ dữ liệu nội bộ (`RowVersion`, `Stock`), và hợp đồng
+  JSON không dính vào tên property của entity.
+- Đặt DTO ở `MiniMart.Web/Models`. `System.Text.Json` tự đổi sang camelCase.
+- Response phân trang phải kèm `HasNextPage`, nếu không client cuộn vô tận không biết dừng.
+- Chọn `Json()` khi client tự dựng DOM hoặc có nhiều loại client; chọn `PartialView()`
+  khi muốn server render sẵn HTML. KHÔNG dùng `View()` cho request bổ sung dữ liệu
+  vào trang đang mở — nó gửi lại cả layout.
+
 ### Layout
 - Khu vực quản trị dùng `Areas/Admin/Views/Shared/_AdminLayout.cshtml`, khai báo trong
   `Areas/Admin/Views/_ViewStart.cshtml`. Trang khách hàng giữ `Views/Shared/_Layout.cshtml`.

@@ -1,4 +1,5 @@
 using MiniMart.Application.Interfaces;
+using MiniMart.Common;
 using MiniMart.Common.Exceptions;
 using MiniMart.Domain.Entities;
 using MiniMart.Domain.Interfaces;
@@ -22,6 +23,16 @@ public class ProductService : IProductService
         _categoryRepository = categoryRepository;
         _unitOfWork = unitOfWork;
     }
+
+    public Task<PagedResult<Product>> GetProductsAsync(
+        int? categoryId = null,
+        decimal? minPrice = null,
+        decimal? maxPrice = null,
+        int page = 1,
+        int pageSize = 12,
+        CancellationToken cancellationToken = default) =>
+        _productRepository.GetProductsAsync(
+            categoryId, minPrice, maxPrice, page, pageSize, cancellationToken);
 
     public Task<List<Product>> GetAllAsync(CancellationToken cancellationToken = default) =>
         _productRepository.GetAllAsync(cancellationToken);
