@@ -74,8 +74,19 @@ Cả hai cách trên đều cho test **luôn xanh kể cả khi code có bug ove
 
 Nếu chưa dựng được integration test, nói thẳng là chưa test được phần concurrency — không thay bằng unit test giả.
 
-### Bước 7 — Commit
-Soạn commit message ngắn gọn theo chuẩn Conventional Commits (`feat:`, `fix:`, `refactor:`...) kèm 1-2 câu tóm tắt thay đổi để dùng cho PR description.
+### Bước 7 — Cập nhật CLAUDE.md rồi Commit
+
+**7a. Cập nhật `CLAUDE.md` — BẮT BUỘC, không phải tuỳ chọn.**
+
+Trước khi soạn commit, rà lại phần vừa làm và bổ sung vào `CLAUDE.md` mọi thứ thuộc các nhóm sau:
+- Quy ước đặt tên hoặc cấu trúc mới (VD: `GetByIdAsync` vs `GetForUpdateAsync`).
+- Quyết định kiến trúc đã chốt và KHÔNG được làm khác đi ở phase sau (VD: `SaveChangesAsync` chỉ nằm ở `IUnitOfWork`).
+- Cạm bẫy đã gặp và cách tránh (VD: nạp lại dropdown khi ModelState hỏng).
+- Nợ kỹ thuật cố ý để lại, ghi vào mục "Nợ kỹ thuật đã biết" kèm lý do — để phase sau không "sửa" nửa vời.
+
+Chỉ ghi thứ **thay đổi cách viết code**. Không chép lại giải thích lý thuyết, không biến `CLAUDE.md` thành giáo trình. Nếu phase vừa rồi không phát sinh quy ước nào thật sự mới, nói rõ "không có gì cần thêm" thay vì thêm cho có.
+
+**7b. Commit.** Soạn commit message ngắn gọn theo chuẩn Conventional Commits (`feat:`, `fix:`, `refactor:`...) kèm 1-2 câu tóm tắt thay đổi để dùng cho PR description. Nếu working tree lẫn nhiều thay đổi khác bản chất (VD: refactor + tính năng mới), đề xuất tách thành nhiều commit.
 
 **Chỉ soạn sẵn message — hỏi người dùng trước khi thực sự chạy `git commit`.**
 
@@ -84,4 +95,4 @@ Soạn commit message ngắn gọn theo chuẩn Conventional Commits (`feat:`, `
 ## Ghi chú khi áp dụng
 - Người dùng nói "làm nhanh, bỏ qua giải thích" cho task cụ thể → tôn trọng, chỉ chạy **Bước 1, 3, 6, 7**.
 - Một Phase có nhiều tính năng nhỏ lặp lại pattern đã học → chạy vòng lặp rút gọn (bỏ Bước 1, 2, 5), nhưng **luôn giữ đủ 7 bước cho phần đầu tiên của mỗi khái niệm mới**.
-- Cuối mỗi Phase lớn: đề xuất cập nhật `CLAUDE.md` nếu có quy ước/pattern mới phát sinh.
+- Bước 7a (cập nhật `CLAUDE.md`) **không được bỏ kể cả khi chạy vòng rút gọn** — đây chính là cơ chế giữ cho các phase sau nhất quán với phase trước.
