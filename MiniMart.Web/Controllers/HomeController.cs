@@ -1,14 +1,43 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using MiniMart.Application.Interfaces;
 using MiniMart.Web.Models;
 
 namespace MiniMart.Web.Controllers;
 
 public class HomeController : Controller
 {
-    public IActionResult Index()
+    private const int PageSize = 12;
+
+    private readonly IProductService _productService;
+    private readonly ICategoryService _categoryService;
+
+    public HomeController(IProductService productService, ICategoryService categoryService)
     {
-        return View();
+        _productService = productService;
+        _categoryService = categoryService;
+    }
+
+    public async Task<IActionResult> Index(int? categoryId, CancellationToken cancellationToken)
+    {
+        // Hai lệnh await NỐI TIẾP nhau, không gói vào Task.WhenAll.
+        // Cả hai dùng chung một DbContext (Scoped trong cùng request), mà
+        // DbContext KHÔNG thread-safe: chạy song song sẽ ném
+        // "A second operation was started on this context instance".
+        var products = await _productService.GetProductsAsync(
+            categoryId: categoryId,
+            page: 1,
+            pageSize: PageSize,
+            cancellationToken: cancellationToken);
+
+        var categories = await _categoryService.GetAllAsync(cancellationToken);
+
+        return View(new HomeIndexViewModel
+        {
+            Products = products,
+            Categories = categories,
+            SelectedCategoryId = categoryId
+        });
     }
 
     public IActionResult Privacy()

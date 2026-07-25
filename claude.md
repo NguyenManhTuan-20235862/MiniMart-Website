@@ -100,6 +100,21 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
 - Area Admin: controller đặt tên `ProductController`, KHÔNG phải `AdminProductController`
   (Area đã cung cấp tiền tố `/Admin/`). Route area phải đăng ký trước route default.
 
+### Razor view và form lọc
+- Razor view **được phép nhận thẳng entity**, không bắt buộc DTO. Ba lý do dùng DTO
+  cho JSON đều không áp dụng: không serialize nên không có vòng lặp; chỉ trường nào
+  được `@` mới ra HTML; Razor được biên dịch nên đổi tên property là lỗi build.
+  Đừng áp dụng máy móc "lúc nào cũng phải DTO".
+- Form lọc/tìm kiếm dùng **GET**, không POST: kết quả nằm trong URL nên bookmark,
+  chia sẻ link và bấm Back/Refresh đều hoạt động.
+- Sau khi lọc phải giữ `selected` trong dropdown, nếu không người dùng mất dấu
+  mình đang xem gì.
+- Hiển thị **trạng thái** còn/hết hàng, KHÔNG hiện con số tồn kho ra HTML.
+- Nhiều lệnh `await` trong cùng một action phải **nối tiếp**, không gói vào
+  `Task.WhenAll`: chúng dùng chung một `DbContext` (Scoped), mà `DbContext` không
+  thread-safe → "A second operation was started on this context instance".
+- Partial dùng lại được đặt ở `Views/Shared` (VD `_ProductCard.cshtml`).
+
 ### Endpoint trả JSON
 - Action trả JSON **BẮT BUỘC** dùng DTO riêng, TUYỆT ĐỐI không trả thẳng entity.
   Lý do cứng: `Product.Category` ↔ `Category.Products` tạo vòng lặp tham chiếu,
@@ -163,6 +178,9 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
 - **Mutation test bắt buộc**: sau khi viết test, cố tình phá code để xác nhận test đỏ.
   Test xanh chưa chứng minh được gì.
 - Tên test viết bằng tiếng Việt không dấu, mô tả hành vi mong đợi.
+- **Không assert trên chuỗi số ngắn** (`DoesNotContain("77")`) khi dữ liệu test sinh
+  ngẫu nhiên: GUID dạng hex có chứa chữ số nên assertion sẽ đỏ ngẫu nhiên. Dùng giá trị
+  đủ đặc biệt (7+ chữ số) hoặc assert theo cấu trúc thay vì chuỗi trần.
 
 ## Môi trường
 - .NET SDK 10, SQL Server 2025 Express, instance `SQLEXPRESS`.
@@ -191,6 +209,11 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
 - Auth còn 3 lỗ hổng: timing attack ở `AuthenticateAsync` (không hash khi user không
   tồn tại), chưa rate limit đăng nhập, mật khẩu chỉ yêu cầu tối thiểu 6 ký tự.
 - Chưa có `Directory.Packages.props` (quản lý version package tập trung), `.editorconfig`, CI.
+- Nút "Xem thêm" trên trang chủ đã render nhưng **chưa có JavaScript** gọi
+  `/Product/LoadMore`. Hệ quả của việc chọn `Json()` thay vì `PartialView()`: client sẽ
+  phải dựng lại markup thẻ sản phẩm bằng JS, tức trùng lặp với `_ProductCard.cshtml`.
+  Khi làm phần này, cân nhắc lại: hoặc chấp nhận trùng lặp, hoặc đổi `LoadMore` sang
+  trả `PartialView("_ProductCard")`.
 
 ## Cách làm việc với tôi (người học)
 - Tôi đang học song song, nên MỌI đoạn code Claude Code viết ra đều phải kèm:

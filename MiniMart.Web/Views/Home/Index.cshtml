@@ -1,8 +1,61 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+@model HomeIndexViewModel
+@{
+    ViewData["Title"] = "Sản phẩm";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
-</div>
+<h1 class="h3 mb-4">Sản phẩm</h1>
+
+@* Form lọc dùng GET chứ không POST: kết quả lọc phải nằm trong URL để người
+   dùng bookmark, chia sẻ link, và bấm Back/Refresh không bị hỏi gửi lại form. *@
+<form method="get" asp-action="Index" class="row g-2 align-items-end mb-4">
+    <div class="col-auto">
+        <label for="categoryId" class="form-label">Danh mục</label>
+        <select id="categoryId" name="categoryId" class="form-select">
+            <option value="">-- Tất cả --</option>
+            @foreach (var category in Model.Categories)
+            {
+                @* selected giữ lại lựa chọn sau khi trang tải lại. *@
+                <option value="@category.Id" selected="@(category.Id == Model.SelectedCategoryId)">
+                    @category.Name
+                </option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Lọc</button>
+        @if (Model.SelectedCategoryId is not null)
+        {
+            <a asp-action="Index" class="btn btn-link">Xoá lọc</a>
+        }
+    </div>
+</form>
+
+@if (Model.Products.TotalCount == 0)
+{
+    <div class="alert alert-light border">
+        Không tìm thấy sản phẩm nào@(Model.SelectedCategoryId is not null ? " trong danh mục này" : "").
+    </div>
+}
+else
+{
+    <p class="text-muted small">
+        Hiển thị @Model.Products.Items.Count / @Model.Products.TotalCount sản phẩm
+    </p>
+
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
+        @foreach (var product in Model.Products.Items)
+        {
+            <partial name="_ProductCard" model="product" />
+        }
+    </div>
+
+    @if (Model.Products.HasNextPage)
+    {
+        <div class="text-center mt-4">
+            <button id="btnLoadMore" type="button" class="btn btn-outline-primary"
+                    data-category-id="@Model.SelectedCategoryId" data-next-page="2">
+                Xem thêm
+            </button>
+        </div>
+    }
+}
