@@ -30,6 +30,11 @@ public static class DependencyInjection
 
         // Scoped, đồng bộ với DbContext: cùng 1 request thì Service và
         // Repository dùng chung Change Tracker.
+        // Scoped bắt buộc: UnitOfWork phải dùng CHUNG DbContext với mọi
+        // Repository trong cùng request, nếu không SaveChanges sẽ không thấy
+        // các thay đổi mà Repository đã đánh dấu.
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();

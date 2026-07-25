@@ -66,9 +66,4 @@ public class ProductRepository : IProductRepository
         // Không async vì chỉ đánh dấu Deleted trong bộ nhớ, chưa chạm DB.
         _context.Products.Remove(product);
     }
-
-    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        await _context.SaveChangesAsync(cancellationToken);
-    }
 }

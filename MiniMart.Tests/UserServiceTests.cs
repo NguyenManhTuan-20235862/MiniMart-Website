@@ -18,9 +18,10 @@ namespace MiniMart.Tests;
 public class UserServiceTests
 {
     private readonly Mock<IUserRepository> _repository = new();
+    private readonly Mock<IUnitOfWork> _unitOfWork = new();
     private readonly IPasswordHasher<User> _hasher = new PasswordHasher<User>();
 
-    private UserService CreateSut() => new(_repository.Object, _hasher);
+    private UserService CreateSut() => new(_repository.Object, _unitOfWork.Object, _hasher);
 
     private void GiaSuUsernameChuaTonTai() =>
         _repository
@@ -93,9 +94,28 @@ public class UserServiceTests
 
         await sut.RegisterAsync("tuan", "MatKhau123");
 
-        _repository.Verify(
-            r => r.SaveChangesAsync(It.IsAny<CancellationToken>()),
+        // Lưu dữ liệu giờ là trách nhiệm của IUnitOfWork, không phải Repository.
+        _unitOfWork.Verify(
+            u => u.SaveChangesAsync(It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_gap_DuplicateKey_phai_doi_thanh_loi_nghiep_vu()
+    {
+        GiaSuUsernameChuaTonTai();
+        _unitOfWork
+            .Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new DuplicateKeyException(new Exception("unique index")));
+        var sut = CreateSut();
+
+        // Mô phỏng khe TOCTOU: ExistsByUsernameAsync trả false, nhưng request
+        // khác chèn cùng username trước khi ta kịp lưu. Unique index chặn lại,
+        // và Service phải dịch lỗi hạ tầng đó thành lỗi nghiệp vụ dễ hiểu.
+        var ex = await Assert.ThrowsAsync<UsernameAlreadyExistsException>(
+            () => sut.RegisterAsync("tuan", "MatKhau123"));
+
+        Assert.Equal("tuan", ex.Username);
     }
 
     [Fact]

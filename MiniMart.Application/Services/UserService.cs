@@ -9,13 +9,18 @@ namespace MiniMart.Application.Services;
 public class UserService : IUserService
 {
     private readonly IUserRepository _userRepository;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordHasher<User> _passwordHasher;
 
     // Chỉ nhận abstraction: IUserRepository nằm ở Domain, không phải
     // UserRepository ở Infrastructure. Đây là DIP trên thực tế.
-    public UserService(IUserRepository userRepository, IPasswordHasher<User> passwordHasher)
+    public UserService(
+        IUserRepository userRepository,
+        IUnitOfWork unitOfWork,
+        IPasswordHasher<User> passwordHasher)
     {
         _userRepository = userRepository;
+        _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
     }
 
@@ -43,7 +48,18 @@ public class UserService : IUserService
         user.PasswordHash = _passwordHasher.HashPassword(user, password);
 
         await _userRepository.AddAsync(user, cancellationToken);
-        await _userRepository.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DuplicateKeyException)
+        {
+            // UnitOfWork chỉ biết "có unique constraint bị vi phạm". Tại đây ta
+            // vừa insert đúng một User, mà User chỉ có một unique index duy nhất
+            // - nên nguyên nhân chắc chắn là username trùng.
+            throw new UsernameAlreadyExistsException(username);
+        }
 
         return user;
     }
@@ -73,7 +89,7 @@ public class UserService : IUserService
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
         {
             user.PasswordHash = _passwordHasher.HashPassword(user, password);
-            await _userRepository.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
         return user;

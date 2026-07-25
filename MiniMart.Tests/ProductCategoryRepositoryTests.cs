@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using MiniMart.Common.Exceptions;
 using MiniMart.Domain.Entities;
 using MiniMart.Domain.Interfaces;
 using MiniMart.Infrastructure.Data;
@@ -140,6 +141,27 @@ public class ProductCategoryRepositoryTests : IAsyncLifetime
         // với chính nó.
         Assert.True(await repository.ExistsByNameAsync(category.Name));
         Assert.False(await repository.ExistsByNameAsync(category.Name, excludeId: category.Id));
+    }
+
+    // ───────────── UnitOfWork ─────────────
+
+    [Fact]
+    public async Task UnitOfWork_phai_doi_loi_unique_index_thanh_DuplicateKeyException()
+    {
+        var existing = await TaoDanhMucCoSanPhamAsync();
+
+        using var scope = CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<ICategoryRepository>();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        // Cố tình bỏ qua bước kiểm tra trùng để chạm thẳng vào unique index,
+        // đúng như kịch bản TOCTOU khi hai request chạy song song.
+        await repository.AddAsync(new Category { Name = existing.Name });
+
+        // Không có phép dịch này thì tầng trên nhận DbUpdateException của
+        // EF Core - tức là Application bị rò rỉ chi tiết hạ tầng.
+        await Assert.ThrowsAsync<DuplicateKeyException>(
+            () => unitOfWork.SaveChangesAsync());
     }
 
     // ───────────── Đăng ký DI ─────────────

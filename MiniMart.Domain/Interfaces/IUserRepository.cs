@@ -14,9 +14,5 @@ public interface IUserRepository
 
     Task AddAsync(User user, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Tách riêng khỏi AddAsync để giữ Unit of Work: nhiều thao tác gom vào
-    /// một lần lưu duy nhất, cùng thành công hoặc cùng thất bại.
-    /// </summary>
-    Task SaveChangesAsync(CancellationToken cancellationToken = default);
+    // Lưu thay đổi nằm ở IUnitOfWork - xem ghi chú trong interface đó.
 }

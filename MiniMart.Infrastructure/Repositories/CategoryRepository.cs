@@ -61,9 +61,4 @@ public class CategoryRepository : ICategoryRepository
     {
         _context.Categories.Remove(category);
     }
-
-    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
-    {
-        await _context.SaveChangesAsync(cancellationToken);
-    }
 }
