@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MiniMart.Domain.Entities;
 
 namespace MiniMart.Infrastructure.Data;
 
@@ -11,8 +12,9 @@ public class MiniMartDbContext : DbContext
     {
     }
 
-    // Phase 2: khai báo DbSet tại đây
-    // public DbSet<Product> Products => Set<Product>();
+    public DbSet<User> Users => Set<User>();
+
+    // Phase 2: thêm DbSet<Product>, DbSet<Order>... tại đây
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
