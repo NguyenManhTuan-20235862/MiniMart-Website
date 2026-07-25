@@ -1,0 +1,70 @@
+@*
+    Layout riêng cho khu vực quản trị. Tách khỏi _Layout của khách hàng vì hai
+    bên phục vụ hai đối tượng khác nhau: menu khác, bố cục khác, và sau này
+    trang khách hàng sẽ có giỏ hàng, tìm kiếm, danh mục nổi bật - những thứ
+    hoàn toàn vô nghĩa với trang quản trị.
+
+    Đặt ở Areas/Admin/Views/Shared nên chỉ view trong Area Admin nhìn thấy.
+*@
+@{
+    // So khớp không phân biệt hoa/thường để đánh dấu mục menu đang mở.
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    string MenuDangMo(string ten) =>
+        string.Equals(controller, ten, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - MiniMart Quản trị</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">
+                MiniMart <span class="badge bg-warning text-dark">Quản trị</span>
+            </a>
+
+            <div class="d-flex align-items-center gap-3">
+                <a class="text-white-50 text-decoration-none small"
+                   asp-area="" asp-controller="Home" asp-action="Index">Về trang khách hàng</a>
+
+                <span class="text-white-50 small">@User.Identity?.Name</span>
+
+                @* Logout là POST nên phải dùng form, không dùng thẻ <a>. *@
+                <form asp-area="" asp-controller="Account" asp-action="Logout" method="post" class="m-0">
+                    <button type="submit" class="btn btn-sm btn-outline-light">Đăng xuất</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <aside class="col-md-3 col-lg-2 bg-white border-end min-vh-100 p-0">
+                <div class="list-group list-group-flush">
+                    <a class="list-group-item list-group-item-action @MenuDangMo("Dashboard")"
+                       asp-area="Admin" asp-controller="Dashboard" asp-action="Index">Bảng điều khiển</a>
+                    <a class="list-group-item list-group-item-action @MenuDangMo("Category")"
+                       asp-area="Admin" asp-controller="Category" asp-action="Index">Danh mục</a>
+                    <a class="list-group-item list-group-item-action @MenuDangMo("Product")"
+                       asp-area="Admin" asp-controller="Product" asp-action="Index">Sản phẩm</a>
+                </div>
+            </aside>
+
+            <main class="col-md-9 col-lg-10 py-4">
+                <partial name="_StatusMessages" />
+
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

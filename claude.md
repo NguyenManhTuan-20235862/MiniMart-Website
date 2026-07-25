@@ -82,6 +82,15 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
 - Area Admin: controller đặt tên `ProductController`, KHÔNG phải `AdminProductController`
   (Area đã cung cấp tiền tố `/Admin/`). Route area phải đăng ký trước route default.
 
+### Layout
+- Khu vực quản trị dùng `Areas/Admin/Views/Shared/_AdminLayout.cshtml`, khai báo trong
+  `Areas/Admin/Views/_ViewStart.cshtml`. Trang khách hàng giữ `Views/Shared/_Layout.cshtml`.
+- Partial dùng chung cho cả hai (VD `_StatusMessages`) đặt ở `Views/Shared` — view trong
+  Area vẫn tìm thấy nhờ cơ chế fallback, không cần chép đôi.
+- Layout được phân giải lúc **chạy**, không phải lúc biên dịch: sai tên trong `_ViewStart`
+  thì `dotnet build` vẫn qua và chỉ nổ khi mở trang. Vì vậy mỗi layout phải có
+  integration test kiểm chứng đúng layout được dùng.
+
 ### Upload file
 - **Tên file luôn do server sinh** (`Guid.NewGuid()` + phần mở rộng). TUYỆT ĐỐI không
   dùng `file.FileName` làm tên lưu: mở đường cho path traversal và ghi đè lẫn nhau.

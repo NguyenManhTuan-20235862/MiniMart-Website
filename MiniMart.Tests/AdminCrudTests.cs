@@ -85,6 +85,34 @@ public class AdminCrudTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    // ───────────── Layout ─────────────
+
+    [Theory]
+    [InlineData("/Admin/Dashboard")]
+    [InlineData("/Admin/Category")]
+    [InlineData("/Admin/Product")]
+    public async Task Trang_quan_tri_phai_dung_layout_rieng(string path)
+    {
+        using var client = await TaoClientAdminAsync();
+
+        var html = await client.GetStringAsync(path);
+
+        // Layout được phân giải lúc CHẠY, không phải lúc biên dịch - đổi sai
+        // tên trong _ViewStart thì build vẫn qua, chỉ nổ khi mở trang.
+        Assert.Contains("MiniMart Quản trị", html);
+        Assert.Contains("Về trang khách hàng", html);
+    }
+
+    [Fact]
+    public async Task Trang_khach_hang_khong_duoc_dung_layout_quan_tri()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.DoesNotContain("MiniMart Quản trị", html);
+    }
+
     // ───────────── Quy tắc nghiệp vụ qua HTTP ─────────────
 
     [Fact]

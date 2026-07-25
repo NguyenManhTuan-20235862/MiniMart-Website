@@ -1,0 +1,10 @@
+@* Dùng chung cho cả _Layout (khách hàng) và _AdminLayout.
+   Đặt ở Views/Shared nên view trong Area vẫn tìm thấy nhờ cơ chế fallback. *@
+@if (TempData["Success"] is string thanhCong)
+{
+    <div class="alert alert-success">@thanhCong</div>
+}
+@if (TempData["Error"] is string loi)
+{
+    <div class="alert alert-danger">@loi</div>
+}
