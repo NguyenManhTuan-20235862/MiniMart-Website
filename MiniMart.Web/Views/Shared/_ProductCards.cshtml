@@ -1,0 +1,15 @@
+@model IReadOnlyList<Product>
+@*
+    Partial cho MỘT TRANG sản phẩm. Chỉ làm một việc: lặp và gọi lại
+    _ProductCard cho từng sản phẩm.
+
+    CỐ Ý không bọc trong thẻ nào cả. Output là một dãy <div class="col">, dán
+    thẳng được vào cuối <div class="row"> của trang. Nếu bọc thêm một <div> để
+    nhét metadata (số trang, còn trang sau) thì Bootstrap grid vỡ: .col phải là
+    con TRỰC TIẾP của .row, thêm một tầng div ở giữa là mất layout.
+    Metadata vì vậy đi qua HTTP response header, xem ProductController.LoadMore.
+*@
+@foreach (var product in Model)
+{
+    <partial name="_ProductCard" model="product" />
+}

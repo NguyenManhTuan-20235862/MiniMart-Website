@@ -114,20 +114,82 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
   `Task.WhenAll`: chúng dùng chung một `DbContext` (Scoped), mà `DbContext` không
   thread-safe → "A second operation was started on this context instance".
 - Partial dùng lại được đặt ở `Views/Shared` (VD `_ProductCard.cshtml`).
+- Ô nhập số (giá, số lượng) trong form lọc dùng `type="number"`, KHÔNG dùng `type="text"`.
+  Theo chuẩn HTML, `input type="number"` luôn gửi giá trị ở dạng chuẩn hoá (dấu `.`
+  thập phân) bất kể locale trình duyệt. Với `type="text"`, người dùng vi-VN gõ
+  `1.000.000` thì model binding trả `null` **trong im lặng** (query string được bind
+  bằng `InvariantCulture`) — không có lỗi nào báo, chỉ là bộ lọc không có tác dụng.
+- Giữ lại giá trị đã nhập cho **mọi** ô lọc, không chỉ dropdown. Điều kiện hiện link
+  "Xoá lọc" phải xét tất cả filter (`HasAnyFilter`), nếu chỉ xét một cái thì người lọc
+  bằng cái còn lại không có đường quay về.
+- Bộ lọc "vô lý nhưng hợp lệ" (VD `minPrice > maxPrice`) phải **cảnh báo**, không im
+  lặng trả về rỗng: SQL đúng nhưng người dùng sẽ tưởng shop hết hàng.
 
-### Endpoint trả JSON
-- Action trả JSON **BẮT BUỘC** dùng DTO riêng, TUYỆT ĐỐI không trả thẳng entity.
-  Lý do cứng: `Product.Category` ↔ `Category.Products` tạo vòng lặp tham chiếu,
-  `System.Text.Json` ném `JsonException: A possible object cycle was detected` → HTTP 500.
-  Lỗi này CÓ ĐIỀU KIỆN (chỉ xảy ra khi navigation được nạp), nên một `Include`
-  thêm vào sau này có thể làm sập endpoint đang chạy tốt.
-- Hai lý do còn lại: không lộ dữ liệu nội bộ (`RowVersion`, `Stock`), và hợp đồng
-  JSON không dính vào tên property của entity.
+### Định dạng số ở tầng hiển thị
+- Dùng `MoneyFormat.ToMoneyText()` (`MiniMart.Web/Extensions`) chứ không gọi trực tiếp
+  `ToString("N0")`. Helper khoá vào `InvariantCulture` để cùng một số ra cùng một chuỗi
+  bất kể locale của máy chạy.
+- Lý do cứng: ASP.NET Core **không** set `CurrentCulture` theo request nếu chưa thêm
+  Request Localization, nên nó bằng locale của OS. Máy dev en-US in `111,000`, máy triển
+  khai vi-VN in `111.000` — cùng một dòng code, hai kết quả, và test nào assert trên
+  chuỗi giá sẽ đỏ khi đổi máy.
+- Cảnh báo nếu sau này thêm `CultureInfo.DefaultThreadCurrentCulture = "vi-VN"`: form
+  POST được bind bằng `CurrentCulture`, nên form Admin sẽ parse `1000.50` thành `100050`.
+
+### Request AJAX bổ sung dữ liệu vào trang đang mở: PartialView, KHÔNG phải JSON
+Quy tắc mặc định của dự án: request AJAX mà kết quả **chỉ để hiển thị** thì trả
+`PartialView()`. Đã cân nhắc và loại `Json()` cho `/Product/LoadMore` (xem nợ kỹ thuật).
+- Lý do quyết định: markup thẻ sản phẩm chỉ được định nghĩa **một lần** ở
+  `_ProductCard.cshtml`. Trả JSON thì client phải dựng lại markup bằng JavaScript, tức
+  viết lần thứ hai cùng một giao diện + cùng cách định dạng tiền + cùng logic badge
+  còn/hết hàng, và phải tự escape XSS bằng tay vì **JSON không escape ký tự `<`**.
+- Lý do quan trọng không kém: HTML server render **test được bằng integration test**,
+  còn hàm dựng DOM trong JavaScript thì không có test nào chạm tới.
+- Chỉ chọn `Json()` khi thật sự có **client không phải trình duyệt** (mobile app), hoặc
+  client cần dữ liệu để tính toán chứ không phải để hiển thị.
+- KHÔNG dùng `View()` cho loại request này — nó gửi lại cả layout. Mỗi endpoint trả
+  partial phải có test khẳng định response **không** chứa `<!DOCTYPE`/`<html`/`navbar`;
+  `PartialView` → `View` là lỗi build-được-nhưng-sai, chỉ test mới bắt.
+- Partial trả về nhiều item: tạo partial bao (`_ProductCards.cshtml`) chỉ làm việc lặp,
+  và **không bọc thêm thẻ nào**. Output phải là dãy `.col` dán thẳng được vào `.row`;
+  thêm một tầng `div` là `.col` không còn con trực tiếp của `.row` → vỡ Bootstrap grid.
+- Metadata phân trang đi qua **HTTP response header** (`X-Next-Page`), vì body là HTML
+  nên không có chỗ đặt. Hết dữ liệu → header rỗng. Đặt tên header thành `const` trong
+  Controller để test tham chiếu cùng một hằng, không gõ lại chuỗi.
+- Endpoint phân trang phải nhận **đúng bộ tham số lọc** như action render trang 1.
+  Thiếu một tham số là bấm "Xem thêm" xong nhận về sản phẩm đã bị loại ở trang 1.
+
+### Nếu về sau cần endpoint JSON thật
+- BẮT BUỘC dùng DTO riêng, TUYỆT ĐỐI không trả thẳng entity. Lý do cứng:
+  `Product.Category` ↔ `Category.Products` tạo vòng lặp tham chiếu, `System.Text.Json`
+  ném `JsonException: A possible object cycle was detected` → HTTP 500. Lỗi này CÓ ĐIỀU
+  KIỆN (chỉ xảy ra khi navigation được nạp), nên một `Include` thêm vào sau này có thể
+  làm sập endpoint đang chạy tốt.
+- Hai lý do còn lại: không lộ dữ liệu nội bộ (`RowVersion`, `Stock`), và hợp đồng JSON
+  không dính vào tên property của entity.
+- Làm phẳng navigation property (`CategoryName` thay vì `Category`) và chuyển thông tin
+  nghiệp vụ thành trạng thái (`InStock: bool` thay vì `Stock: int`) — DTO cũng là một
+  bề mặt lộ dữ liệu như HTML.
 - Đặt DTO ở `MiniMart.Web/Models`. `System.Text.Json` tự đổi sang camelCase.
 - Response phân trang phải kèm `HasNextPage`, nếu không client cuộn vô tận không biết dừng.
-- Chọn `Json()` khi client tự dựng DOM hoặc có nhiều loại client; chọn `PartialView()`
-  khi muốn server render sẵn HTML. KHÔNG dùng `View()` cho request bổ sung dữ liệu
-  vào trang đang mở — nó gửi lại cả layout.
+
+### JavaScript gọi endpoint
+- Chèn HTML từ server bằng `insertAdjacentHTML('beforeend', html)`. An toàn vì Razor đã
+  escape ở server, và `insertAdjacentHTML` **không** thực thi thẻ `<script>` được chèn.
+- Nếu (và chỉ nếu) phải dựng DOM từ JSON: dữ liệu người dùng nhập BẮT BUỘC đi qua
+  `textContent`, chỉ dùng `innerHTML` cho khung HTML tĩnh. Razor tự escape
+  `@Model.Name`, JavaScript thì không.
+- Bộ lọc hiện tại truyền cho JS qua `data-*` **trên nút**, không đọc lại từ các ô input:
+  người dùng có thể sửa ô lọc mà chưa bấm "Lọc", lúc đó ô nhập và danh sách đang hiển
+  thị đã lệch nhau — phải phân trang theo bộ lọc ĐANG hiển thị.
+- Client bỏ hẳn tham số không có giá trị khỏi query string (`if (value) params.set(...)`),
+  đúng tinh thần `if (x.HasValue) query = query.Where(...)` ở Repository.
+- `fetch` **không** reject khi server trả 4xx/5xx (chỉ reject khi lỗi mạng) → luôn kiểm
+  tra `response.ok` trước khi đọc body. Bỏ qua bước này là dán HTML trang lỗi vào DOM.
+- Có cờ chặn double-click: `fetch` là bất đồng bộ nên bấm hai lần nhanh sẽ thêm cùng
+  một trang vào DOM hai lần.
+- Server là nơi duy nhất biết còn trang sau hay không — client đọc header, không tự suy
+  ra từ số item nhận được (`items.length < pageSize` sai khi trang cuối vừa đủ đầy).
 
 ### Layout
 - Khu vực quản trị dùng `Areas/Admin/Views/Shared/_AdminLayout.cshtml`, khai báo trong
@@ -209,11 +271,16 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
 - Auth còn 3 lỗ hổng: timing attack ở `AuthenticateAsync` (không hash khi user không
   tồn tại), chưa rate limit đăng nhập, mật khẩu chỉ yêu cầu tối thiểu 6 ký tự.
 - Chưa có `Directory.Packages.props` (quản lý version package tập trung), `.editorconfig`, CI.
-- Nút "Xem thêm" trên trang chủ đã render nhưng **chưa có JavaScript** gọi
-  `/Product/LoadMore`. Hệ quả của việc chọn `Json()` thay vì `PartialView()`: client sẽ
-  phải dựng lại markup thẻ sản phẩm bằng JS, tức trùng lặp với `_ProductCard.cshtml`.
-  Khi làm phần này, cân nhắc lại: hoặc chấp nhận trùng lặp, hoặc đổi `LoadMore` sang
-  trả `PartialView("_ProductCard")`.
+- **`wwwroot/js/home-load-more.js` KHÔNG có test tự động** — dự án chưa có headless
+  browser (Playwright). Kiểm chứng được: HTML mà `/Product/LoadMore` trả về (integration
+  test — đây là phần lớn giá trị của việc chọn PartialView), header `X-Next-Page`
+  (integration test), `data-*` trên nút (integration test), cú pháp JS (`node --check`).
+  Chưa kiểm chứng được: `insertAdjacentHTML` chạy thật, cập nhật `shownCount`, xoá nút
+  khi hết dữ liệu, chặn double-click. Phải bấm tay.
+- `minPrice`/`maxPrice` chưa được validate ở Service (giá âm, min > max đều đi qua).
+  Trang chủ **cảnh báo** min > max ở view; `/Product/LoadMore` thì trả rỗng, không cảnh báo.
+- `/Product/LoadMore` không có action `Index` đi kèm — `/Product` hiện trả 404. Trang chi
+  tiết sản phẩm chưa làm.
 
 ## Cách làm việc với tôi (người học)
 - Tôi đang học song song, nên MỌI đoạn code Claude Code viết ra đều phải kèm:

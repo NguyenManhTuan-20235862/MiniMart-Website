@@ -30,8 +30,10 @@
                 <p class="card-text text-muted small mb-2">@Model.Category.Name</p>
             }
 
+            @* ToMoneyText() khoá vào InvariantCulture: cùng một con số ra cùng
+               một chuỗi bất kể locale của máy chạy server. *@
             <p class="card-text fw-bold text-danger mt-auto mb-1">
-                @Model.Price.ToString("N0") đ
+                @Model.Price.ToMoneyText() đ
             </p>
 
             @* Chỉ hiện TRẠNG THÁI còn/hết hàng, không hiện con số tồn kho -

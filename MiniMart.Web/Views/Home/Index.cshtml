@@ -21,28 +21,59 @@
             }
         </select>
     </div>
+
+    @*
+        type="number" chứ không phải type="text": theo chuẩn HTML, giá trị của
+        input number LUÔN được gửi lên ở dạng chuẩn hoá (dấu . làm phần thập
+        phân), không phụ thuộc locale của trình duyệt. Dùng type="text" thì
+        người dùng vi-VN gõ "1.000.000" và model binding trả về null trong im lặng.
+    *@
+    <div class="col-auto">
+        <label for="minPrice" class="form-label">Giá từ</label>
+        <input type="number" id="minPrice" name="minPrice" class="form-control"
+               value="@(Model.MinPrice?.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+               min="0" step="1000" placeholder="0" style="max-width: 140px;" />
+    </div>
+    <div class="col-auto">
+        <label for="maxPrice" class="form-label">Giá đến</label>
+        <input type="number" id="maxPrice" name="maxPrice" class="form-control"
+               value="@(Model.MaxPrice?.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+               min="0" step="1000" placeholder="Không giới hạn" style="max-width: 180px;" />
+    </div>
+
     <div class="col-auto">
         <button type="submit" class="btn btn-primary">Lọc</button>
-        @if (Model.SelectedCategoryId is not null)
+        @if (Model.HasAnyFilter)
         {
             <a asp-action="Index" class="btn btn-link">Xoá lọc</a>
         }
     </div>
 </form>
 
+@if (Model.MinPrice is not null && Model.MaxPrice is not null && Model.MinPrice > Model.MaxPrice)
+{
+    @* Khoảng giá ngược thì SQL trả về rỗng một cách hoàn toàn đúng, nhưng người
+       dùng sẽ tưởng shop hết hàng. Nói rõ nguyên nhân thay vì để họ đoán. *@
+    <div class="alert alert-warning">
+        Khoảng giá không hợp lệ: giá từ (@Model.MinPrice.Value.ToMoneyText() đ)
+        lớn hơn giá đến (@Model.MaxPrice.Value.ToMoneyText() đ).
+    </div>
+}
+
 @if (Model.Products.TotalCount == 0)
 {
     <div class="alert alert-light border">
-        Không tìm thấy sản phẩm nào@(Model.SelectedCategoryId is not null ? " trong danh mục này" : "").
+        Không tìm thấy sản phẩm nào@(Model.HasAnyFilter ? " khớp với bộ lọc" : "").
     </div>
 }
 else
 {
     <p class="text-muted small">
-        Hiển thị @Model.Products.Items.Count / @Model.Products.TotalCount sản phẩm
+        Hiển thị <span id="shownCount">@Model.Products.Items.Count</span>
+        / @Model.Products.TotalCount sản phẩm
     </p>
 
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
+    <div id="productGrid" class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
         @foreach (var product in Model.Products.Items)
         {
             <partial name="_ProductCard" model="product" />
@@ -52,10 +83,25 @@ else
     @if (Model.Products.HasNextPage)
     {
         <div class="text-center mt-4">
+            @*
+                Bộ lọc hiện tại được gửi kèm nút qua data-*. Không đọc lại từ
+                các ô input: người dùng có thể sửa ô "Giá từ" mà chưa bấm "Lọc",
+                lúc đó ô input và danh sách đang hiển thị đã lệch nhau - phải
+                phân trang theo bộ lọc ĐANG hiển thị, không phải theo ô nhập.
+            *@
             <button id="btnLoadMore" type="button" class="btn btn-outline-primary"
-                    data-category-id="@Model.SelectedCategoryId" data-next-page="2">
+                    data-category-id="@Model.SelectedCategoryId"
+                    data-min-price="@(Model.MinPrice?.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                    data-max-price="@(Model.MaxPrice?.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                    data-next-page="2"
+                    data-url="@Url.Action("LoadMore", "Product")">
                 Xem thêm
             </button>
+            <div id="loadMoreError" class="text-danger small mt-2 d-none"></div>
         </div>
     }
+}
+
+@section Scripts {
+    <script src="~/js/home-load-more.js" asp-append-version="true"></script>
 }
