@@ -13,8 +13,10 @@ public class MiniMartDbContext : DbContext
     }
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Product> Products => Set<Product>();
 
-    // Phase 2: thêm DbSet<Product>, DbSet<Order>... tại đây
+    // Phase sau: thêm DbSet<Order>, DbSet<OrderItem>... tại đây
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
