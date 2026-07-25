@@ -1,0 +1,13 @@
+@{
+    ViewData["Title"] = "Bảng điều khiển";
+}
+
+<h2>Bảng điều khiển quản trị</h2>
+
+<div class="alert alert-success">
+    Bạn vào được trang này vì claim <code>ClaimTypes.Role</code> trong cookie có
+    giá trị <strong>Admin</strong>. Tài khoản <code>Customer</code> sẽ bị
+    chuyển sang trang Không có quyền truy cập.
+</div>
+
+<p>Đang đăng nhập: <strong>@User.Identity?.Name</strong></p>

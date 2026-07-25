@@ -64,6 +64,13 @@ app.UseAuthorization();
 
 app.MapStaticAssets();
 
+// Route cho Area phải đăng ký TRƯỚC route default, vì route được duyệt theo
+// thứ tự: "Admin/Dashboard" khớp {controller}/{action} trước khi kịp tới đây.
+app.MapControllerRoute(
+    name: "areas",
+    pattern: "{area:exists}/{controller=Dashboard}/{action=Index}/{id?}")
+    .WithStaticAssets();
+
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}")

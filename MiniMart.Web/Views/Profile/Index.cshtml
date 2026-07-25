@@ -1,0 +1,33 @@
+@using System.Security.Claims
+@{
+    ViewData["Title"] = "Thông tin tài khoản";
+}
+
+<h2>Thông tin tài khoản</h2>
+
+<p>
+    Toàn bộ dữ liệu dưới đây được giải mã từ cookie <code>MiniMart.Auth</code>,
+    không hề có truy vấn database nào trong request này.
+</p>
+
+<table class="table table-bordered">
+    <thead>
+        <tr><th>Claim Type</th><th>Giá trị</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var claim in User.Claims)
+        {
+            <tr>
+                <td><code>@claim.Type</code></td>
+                <td>@claim.Value</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<ul>
+    <li><code>User.Identity.Name</code> = <strong>@User.Identity?.Name</strong></li>
+    <li><code>User.Identity.IsAuthenticated</code> = <strong>@User.Identity?.IsAuthenticated</strong></li>
+    <li><code>User.IsInRole("Admin")</code> = <strong>@User.IsInRole("Admin")</strong></li>
+    <li><code>FindFirstValue(NameIdentifier)</code> = <strong>@User.FindFirstValue(ClaimTypes.NameIdentifier)</strong></li>
+</ul>
