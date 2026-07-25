@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MiniMart.Domain.Interfaces;
 using MiniMart.Infrastructure.Data;
+using MiniMart.Infrastructure.Repositories;
 
 namespace MiniMart.Infrastructure;
 
@@ -26,11 +28,9 @@ public static class DependencyInjection
         services.AddDbContext<MiniMartDbContext>(options =>
             options.UseSqlServer(connectionString));
 
-        // ─────────────────────────────────────────────────────────────
-        // Phase 2: đăng ký Repository tại đây
-        // services.AddScoped<IProductRepository, ProductRepository>();
-        // services.AddScoped<IOrderRepository, OrderRepository>();
-        // ─────────────────────────────────────────────────────────────
+        // Scoped, đồng bộ với DbContext: cùng 1 request thì Service và
+        // Repository dùng chung Change Tracker.
+        services.AddScoped<IUserRepository, UserRepository>();
 
         return services;
     }
