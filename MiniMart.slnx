@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="MiniMart.Application/MiniMart.Application.csproj" />
+  <Project Path="MiniMart.Common/MiniMart.Common.csproj" />
+  <Project Path="MiniMart.Domain/MiniMart.Domain.csproj" />
+  <Project Path="MiniMart.Infrastructure/MiniMart.Infrastructure.csproj" />
+  <Project Path="MiniMart.Tests/MiniMart.Tests.csproj" />
+  <Project Path="MiniMart.Web/MiniMart.Web.csproj" />
+</Solution>
