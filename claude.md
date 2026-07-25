@@ -5,14 +5,16 @@ Controller → Service → Repository → EF Core/Dapper → SQL Server
 
 ## Cấu trúc Solution
 - MiniMart.Web             : ASP.NET Core MVC (Controller, View, ViewModel)
-- MiniMart.Application      : Service layer (business logic)
-- MiniMart.Domain           : Entity, Interface (IRepository, IService)
+- MiniMart.Application      : Service layer (IService + business logic)
+- MiniMart.Domain           : Entity, Repository interface (IRepository)
 - MiniMart.Infrastructure   : EF Core DbContext, Repository impl, Dapper
 - MiniMart.Common           : Helper, Constants, Custom Exception
 
 ## Quy ước code
 - Controller KHÔNG chứa business logic, chỉ gọi Service.
-- Service phụ thuộc Interface (Domain), không phụ thuộc trực tiếp Infrastructure (DIP).
+- IRepository đặt ở Domain (Domain khai báo thứ nó CẦN từ tầng lưu trữ).
+- IService đặt ở Application, cùng tầng với implementation của nó. Domain giữ thuần nghiệp vụ.
+- Service phụ thuộc IRepository (Domain), không phụ thuộc trực tiếp Infrastructure (DIP).
 - Đặt tên: IProductRepository / ProductRepository, IProductService / ProductService.
 - Toàn bộ thao tác DB dùng async/await.
 - Validation: Data Annotation trước, custom validation nếu logic phức tạp hơn.

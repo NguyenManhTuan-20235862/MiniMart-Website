@@ -1,6 +1,6 @@
 ---
 name: repository-pattern
-description: Dùng khi tạo mới hoặc chỉnh sửa Repository/Service trong MiniMart - đảm bảo đúng thứ tự Interface (Domain) → Implementation (Infrastructure) → đăng ký DI (Scoped) → inject vào Service, và luôn giải thích DIP.
+description: Dùng khi tạo mới hoặc chỉnh sửa Repository/Service trong MiniMart - đảm bảo đúng thứ tự IRepository (Domain) / IService (Application) → Implementation → đăng ký DI (Scoped) → inject vào Service, và luôn giải thích DIP.
 ---
 
 # Repository Pattern - MiniMart
@@ -10,8 +10,9 @@ Mỗi khi tạo mới hoặc chỉnh sửa một Repository hoặc Service trong
 
 ## Quy trình bắt buộc (đúng thứ tự)
 
-1. **Domain (`MiniMart.Domain`)**: định nghĩa interface trước tiên.
-   - Đặt tên: `I<Entity>Repository` (VD: `IProductRepository`), `I<Entity>Service` (VD: `IProductService`).
+1. **Định nghĩa interface trước tiên** — hai loại interface nằm ở HAI project khác nhau:
+   - `I<Entity>Repository` (VD: `IProductRepository`) → **`MiniMart.Domain`**. Domain khai báo thứ nó *cần* từ tầng lưu trữ.
+   - `I<Entity>Service` (VD: `IProductService`) → **`MiniMart.Application`**, nằm cùng tầng với implementation của nó, để Domain giữ thuần nghiệp vụ.
    - Interface chỉ khai báo method signature, không chứa logic.
    - Mọi method thao tác DB phải là `async`, trả về `Task`/`Task<T>`.
 
@@ -28,7 +29,8 @@ Mỗi khi tạo mới hoặc chỉnh sửa một Repository hoặc Service trong
    - Dùng vòng đời **Scoped** vì mỗi HTTP request có một `DbContext` riêng, và `DbContext` không thread-safe nên không được dùng Singleton; Transient thì tạo lại nhiều lần không cần thiết trong cùng một request.
 
 4. **Service (`MiniMart.Application`)**:
-   - Inject interface (`IProductRepository`) qua constructor, KHÔNG inject trực tiếp class Infrastructure.
+   - `ProductService` implement `IProductService` (cả hai cùng nằm trong project này).
+   - Inject `IProductRepository` qua constructor, KHÔNG inject trực tiếp class Infrastructure.
    - Service chứa business logic, gọi Repository để lấy/lưu dữ liệu.
 
 ## Luôn giải thích DIP khi sinh code
@@ -42,8 +44,9 @@ Mỗi lần áp dụng skill này, phải giải thích ngắn gọn cho ngườ
   - `MiniMart.Domain` không reference `MiniMart.Infrastructure` → tránh phụ thuộc vòng giữa các project trong solution.
 
 ## Checklist trước khi hoàn thành
-- [ ] Interface nằm trong `MiniMart.Domain`, không chứa logic.
-- [ ] Implementation nằm trong `MiniMart.Infrastructure`.
+- [ ] `IRepository` nằm trong `MiniMart.Domain`, không chứa logic.
+- [ ] `IService` nằm trong `MiniMart.Application`, KHÔNG nằm ở Domain.
+- [ ] `Repository` implement nằm trong `MiniMart.Infrastructure`.
 - [ ] Đã đăng ký DI Scoped trong `Program.cs`.
 - [ ] Service chỉ inject Interface, không inject class Infrastructure.
 - [ ] Đã giải thích DIP cho người dùng.
