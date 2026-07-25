@@ -14,6 +14,8 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<IProductService, ProductService>();
 
         // Singleton hợp lệ ở đây: PasswordHasher không giữ state và không phụ
         // thuộc DbContext. Nếu nó phụ thuộc thứ gì Scoped thì Singleton sẽ tạo
