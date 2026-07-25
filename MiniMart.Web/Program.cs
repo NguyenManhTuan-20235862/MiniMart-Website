@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
 using MiniMart.Application;
 using MiniMart.Infrastructure;
 
@@ -9,6 +10,39 @@ builder.Services.AddControllersWithViews();
 // Composition Root: nơi duy nhất được biết class implementation cụ thể.
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Cookie Authentication: đặt Cookie làm scheme mặc định, nên [Authorize] không
+// tham số sẽ dùng scheme này.
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        // Ba đường dẫn framework tự redirect tới. Controller tương ứng chưa tồn
+        // tại - sẽ tạo ở phase sau, khai báo trước cho khớp.
+        options.LoginPath = "/Account/Login";
+        options.LogoutPath = "/Account/Logout";
+        options.AccessDeniedPath = "/Account/AccessDenied";
+
+        options.Cookie.Name = "MiniMart.Auth";
+
+        // Chặn JavaScript đọc cookie -> XSS không lấy được phiên đăng nhập.
+        options.Cookie.HttpOnly = true;
+
+        // Lax: không gửi cookie khi request đến từ site khác bằng POST,
+        // chặn phần lớn kịch bản CSRF mà vẫn giữ được điều hướng bình thường.
+        options.Cookie.SameSite = SameSiteMode.Lax;
+
+        // Profile "http" chạy localhost không TLS, ép Always sẽ khiến trình duyệt
+        // không bao giờ gửi cookie -> đăng nhập thất bại im lặng khi dev.
+        options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
+
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+
+        // Còn hoạt động thì hạn tự gia hạn; ngồi im quá 8 tiếng mới bị đăng xuất.
+        options.SlidingExpiration = true;
+    });
 
 var app = builder.Build();
 
@@ -23,6 +57,9 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseRouting();
 
+// BẮT BUỘC đứng trước UseAuthorization: middleware này đọc cookie và gán
+// HttpContext.User. Thiếu nó thì User luôn rỗng và mọi [Authorize] đều trượt.
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
@@ -34,3 +71,7 @@ app.MapControllerRoute(
 
 
 app.Run();
+
+// Top-level statements sinh ra class Program là internal. Khai báo lại thành
+// public để WebApplicationFactory<Program> trong test project nhìn thấy được.
+public partial class Program;
