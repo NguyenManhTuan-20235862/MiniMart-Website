@@ -31,6 +31,8 @@ public static class DependencyInjection
         // Scoped, đồng bộ với DbContext: cùng 1 request thì Service và
         // Repository dùng chung Change Tracker.
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
 
         return services;
     }
