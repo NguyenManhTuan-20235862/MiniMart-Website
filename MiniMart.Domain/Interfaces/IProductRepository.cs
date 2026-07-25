@@ -1,9 +1,22 @@
+using MiniMart.Common;
 using MiniMart.Domain.Entities;
 
 namespace MiniMart.Domain.Interfaces;
 
 public interface IProductRepository
 {
+    /// <summary>
+    /// Danh sách sản phẩm có lọc và phân trang. Mọi tham số lọc đều tuỳ chọn:
+    /// null nghĩa là không áp dụng điều kiện đó.
+    /// </summary>
+    Task<PagedResult<Product>> GetProductsAsync(
+        int? categoryId = null,
+        decimal? minPrice = null,
+        decimal? maxPrice = null,
+        int page = 1,
+        int pageSize = 12,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Danh sách để hiển thị - kèm Category, không theo dõi thay đổi.</summary>
     Task<List<Product>> GetAllAsync(CancellationToken cancellationToken = default);
 

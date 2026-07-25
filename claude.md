@@ -45,6 +45,24 @@ Tiêu chí phân loại, không phải cảm tính:
   RowVersion gốc nên không phát hiện được xung đột.
 - Truy vấn trả về entity có navigation property phải `Include` đầy đủ.
 
+### Truy vấn có lọc và phân trang
+- Bộ lọc tuỳ chọn: dựng `IQueryable` rồi `if (x.HasValue) query = query.Where(...)`.
+  Nhiều `Where` chồng nhau được dịch thành MỘT câu SQL với `AND`, không phải nhiều lần
+  truy vấn. Chỉ `ToListAsync`/`CountAsync` mới thực sự chạm DB.
+- `Skip`/`Take` BẮT BUỘC đi kèm `OrderBy` **có tie-breaker duy nhất** (`ThenBy(p => p.Id)`).
+  Thiếu tie-breaker thì bản ghi trùng khoá sắp xếp có thể xuất hiện ở hai trang liền nhau
+  trong khi bản ghi khác biến mất.
+- Phương thức phân trang trả `PagedResult<T>` (có `TotalCount`), không trả `List<T>`:
+  giao diện cần tổng số bản ghi để biết còn trang sau hay không. `TotalCount` đếm theo
+  BỘ LỌC, chưa phân trang — hai query trên cùng một `IQueryable`.
+- Luôn kẹp `page` và `pageSize` đến từ query string (`page < 1` → 1, `pageSize` clamp
+  tối đa 100) để `?pageSize=999999` không kéo sập server.
+- EF Core **nhúng thẳng hằng số** vào SQL và chỉ tham số hoá giá trị đến từ **biến**.
+  Viết literal trong query làm mỗi giá trị sinh một câu SQL riêng, phá vỡ tái sử dụng
+  execution plan. Luôn truyền qua biến.
+- Dùng `ToQueryString()` để xem SQL mà không chạy query; dùng nó trong test để khoá
+  các tính chất quan trọng (có `OFFSET/FETCH`, có tham số hoá, có tie-breaker).
+
 ### Validate nghiệp vụ — luôn làm ở HAI nơi
 Quy tắc chung của dự án: **validate ở Service để có thông báo tử tế, ràng buộc ở DB để có sự thật.**
 - Kiểm tra ở Service luôn có khe TOCTOU (giữa lúc kiểm tra và lúc lưu).
