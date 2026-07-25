@@ -71,6 +71,17 @@
     </header>
     <div class="container">
         <main role="main" class="pb-3">
+            @* TempData sống qua đúng một lần redirect - hợp với mô hình
+               Post-Redirect-Get mà các form CRUD đang dùng. *@
+            @if (TempData["Success"] is string thanhCong)
+            {
+                <div class="alert alert-success">@thanhCong</div>
+            }
+            @if (TempData["Error"] is string loi)
+            {
+                <div class="alert alert-danger">@loi</div>
+            }
+
             @RenderBody()
         </main>
     </div>

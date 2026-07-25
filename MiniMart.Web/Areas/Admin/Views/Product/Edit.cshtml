@@ -1,0 +1,45 @@
+@model ProductFormViewModel
+@{
+    ViewData["Title"] = "Sửa sản phẩm";
+}
+
+<h2>Sửa sản phẩm</h2>
+
+<div class="col-md-6">
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+        <div class="mb-3">
+            <label asp-for="Name" class="form-label"></label>
+            <input asp-for="Name" class="form-control" />
+            <span asp-validation-for="Name" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="CategoryId" class="form-label"></label>
+            <select asp-for="CategoryId" asp-items="Model.Categories" class="form-select">
+                <option value="">-- Chọn danh mục --</option>
+            </select>
+            <span asp-validation-for="CategoryId" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Price" class="form-label"></label>
+            <input asp-for="Price" class="form-control" />
+            <span asp-validation-for="Price" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Stock" class="form-label"></label>
+            <input asp-for="Stock" class="form-control" />
+            <span asp-validation-for="Stock" class="text-danger"></span>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Lưu</button>
+        <a asp-action="Index" class="btn btn-link">Huỷ</a>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

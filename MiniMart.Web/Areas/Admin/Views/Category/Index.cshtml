@@ -1,0 +1,34 @@
+@model List<Category>
+@{
+    ViewData["Title"] = "Quản lý danh mục";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Danh mục</h2>
+    <a asp-action="Create" class="btn btn-primary">Thêm danh mục</a>
+</div>
+
+@if (Model.Count == 0)
+{
+    <p class="text-muted">Chưa có danh mục nào.</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr><th>Tên danh mục</th><th class="text-end">Thao tác</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var category in Model)
+            {
+                <tr>
+                    <td>@category.Name</td>
+                    <td class="text-end">
+                        <a asp-action="Edit" asp-route-id="@category.Id" class="btn btn-sm btn-outline-secondary">Sửa</a>
+                        <a asp-action="Delete" asp-route-id="@category.Id" class="btn btn-sm btn-outline-danger">Xoá</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

@@ -1,0 +1,45 @@
+@model List<Product>
+@{
+    ViewData["Title"] = "Quản lý sản phẩm";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Sản phẩm</h2>
+    <a asp-action="Create" class="btn btn-primary">Thêm sản phẩm</a>
+</div>
+
+@if (Model.Count == 0)
+{
+    <p class="text-muted">Chưa có sản phẩm nào. Cần tạo danh mục trước khi thêm sản phẩm.</p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Tên sản phẩm</th>
+                <th>Danh mục</th>
+                <th class="text-end">Giá</th>
+                <th class="text-end">Tồn kho</th>
+                <th class="text-end">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var product in Model)
+            {
+                <tr>
+                    <td>@product.Name</td>
+                    @* Đọc được Category.Name là nhờ Include trong repository.
+                       Thiếu Include thì dòng này ném NullReferenceException. *@
+                    <td>@product.Category.Name</td>
+                    <td class="text-end">@product.Price.ToString("N0") đ</td>
+                    <td class="text-end">@product.Stock</td>
+                    <td class="text-end">
+                        <a asp-action="Edit" asp-route-id="@product.Id" class="btn btn-sm btn-outline-secondary">Sửa</a>
+                        <a asp-action="Delete" asp-route-id="@product.Id" class="btn btn-sm btn-outline-danger">Xoá</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
