@@ -18,7 +18,19 @@ Controller → Service → Repository → EF Core/Dapper → SQL Server
 - Service phụ thuộc IRepository (Domain), không phụ thuộc trực tiếp Infrastructure (DIP).
 - Đặt tên: IProductRepository / ProductRepository, IProductService / ProductService.
 - Toàn bộ thao tác DB dùng async/await, mọi method public nhận CancellationToken.
-- Validation: Data Annotation trước, custom validation nếu logic phức tạp hơn.
+
+### Validation — đặt ở đâu
+Tiêu chí phân loại, không phải cảm tính:
+- **Data Annotation** cho ràng buộc thuộc về BẢN THÂN giá trị: bắt buộc nhập, độ dài,
+  khoảng số, định dạng. Đánh giá được mà không cần biết gì ngoài chính giá trị đó.
+- **Service** cho mọi ràng buộc cần một trong ba thứ: truy vấn DB, `async`, hoặc
+  dependency từ DI. Lý do `ValidationAttribute.IsValid` có chữ ký ĐỒNG BỘ — query DB
+  trong đó buộc phải `.GetAwaiter().GetResult()`, gây thread-pool starvation.
+- Ví dụ đã áp dụng: `CategoryId` có `[Range(1, ...)]` để hỏi "đã chọn chưa", còn
+  "danh mục đó có tồn tại không" nằm ở `ProductService.BaoDamDanhMucTonTaiAsync`.
+- Cột tiền tệ: dùng `[Range(typeof(decimal), "0.01", "...", ConvertValueInInvariantCulture = true)]`.
+  Overload `Range(0.01, ...)` nhận `double` nên làm tròn nhị phân; thiếu
+  `ConvertValueInInvariantCulture` thì máy locale vi-VN parse `"0.01"` sai.
 
 ### Unit of Work
 - `SaveChangesAsync` nằm ở **IUnitOfWork**, TUYỆT ĐỐI không thêm lại vào Repository.
@@ -48,6 +60,9 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
   (`UsernameAlreadyExistsException`, `CategoryNameAlreadyExistsException`).
 - Application và Web KHÔNG được `using Microsoft.EntityFrameworkCore`.
 - `DbUpdateConcurrencyException` cố ý không bị bọc lại — mỗi nghiệp vụ xử lý riêng.
+- `NotFoundException` mang theo `EntityName`, và Controller PHẢI dùng nó để phân biệt:
+  thiếu chính đối tượng đang thao tác → `NotFound()`; thiếu đối tượng được tham chiếu
+  → `AddModelError` vào đúng ô nhập rồi render lại form.
 
 ### Đăng ký DI
 - Không viết `AddScoped` rời rạc trong `Program.cs`. Dùng extension method

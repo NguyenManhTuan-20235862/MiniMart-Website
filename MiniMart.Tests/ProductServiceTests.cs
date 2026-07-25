@@ -33,10 +33,15 @@ public class ProductServiceTests
             .ReturnsAsync((Category?)null);
         var sut = CreateSut();
 
-        // Kiểm tra chủ động thay vì để lỗi khoá ngoại của DB văng ra - thông báo
-        // "FK constraint violated" vô nghĩa với người dùng cuối.
-        await Assert.ThrowsAsync<NotFoundException>(
+        // Đây là phép kiểm tra mà Data Annotation KHÔNG làm được (cần truy vấn
+        // DB, cần async, cần DI) - xem ProductFormValidationTests để thấy tầng
+        // annotation cho qua trường hợp này.
+        var ex = await Assert.ThrowsAsync<NotFoundException>(
             () => sut.CreateAsync("San pham", 100m, 5, categoryId: 99));
+
+        // EntityName cho phép Controller phân biệt "thiếu danh mục được chọn"
+        // với "thiếu chính sản phẩm đang sửa".
+        Assert.Equal(nameof(Category), ex.EntityName);
 
         _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }

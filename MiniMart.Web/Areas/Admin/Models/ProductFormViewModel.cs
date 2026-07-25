@@ -17,7 +17,13 @@ public class ProductFormViewModel
     [Display(Name = "Tên sản phẩm")]
     public string Name { get; set; } = string.Empty;
 
-    [Range(0, 999_999_999, ErrorMessage = "Giá phải từ 0 trở lên.")]
+    // Dùng overload typeof(decimal) + chuỗi thay vì Range(0.01, ...) vì overload
+    // kia nhận double, làm tròn nhị phân trước khi so sánh với decimal.
+    // ConvertValueInInvariantCulture: không có nó, máy dùng locale vi-VN sẽ hiểu
+    // "0.01" theo dấu phân cách thập phân là dấu phẩy và parse ra số khác hẳn.
+    [Range(typeof(decimal), "0.01", "999999999",
+        ConvertValueInInvariantCulture = true,
+        ErrorMessage = "Giá phải lớn hơn 0.")]
     [Display(Name = "Giá (VNĐ)")]
     public decimal Price { get; set; }
 
@@ -25,6 +31,9 @@ public class ProductFormViewModel
     [Display(Name = "Tồn kho")]
     public int Stock { get; set; }
 
+    // Data Annotation chỉ kiểm được "đã chọn gì đó chưa" - đây là ràng buộc
+    // thuộc về bản thân giá trị. Còn "danh mục đó có TỒN TẠI không" phụ thuộc
+    // trạng thái DB nên nằm ở ProductService, xem BaoDamDanhMucTonTaiAsync.
     [Range(1, int.MaxValue, ErrorMessage = "Vui lòng chọn danh mục.")]
     [Display(Name = "Danh mục")]
     public int CategoryId { get; set; }

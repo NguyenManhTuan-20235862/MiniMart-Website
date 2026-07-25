@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using MiniMart.Application.Interfaces;
 using MiniMart.Common.Exceptions;
+using MiniMart.Domain.Entities;
 using MiniMart.Web.Areas.Admin.Models;
 
 namespace MiniMart.Web.Areas.Admin.Controllers;
@@ -52,8 +53,10 @@ public class ProductController : Controller
             await _productService.CreateAsync(
                 model.Name, model.Price, model.Stock, model.CategoryId, cancellationToken);
         }
-        catch (NotFoundException ex)
+        catch (NotFoundException ex) when (ex.EntityName == nameof(Category))
         {
+            // Danh mục bị xoá sau khi form đã render - lỗi gắn vào đúng ô chọn
+            // danh mục để người dùng chọn lại.
             ModelState.AddModelError(nameof(model.CategoryId), ex.Message);
             model.Categories = await LayDanhSachDanhMucAsync(cancellationToken);
             return View(model);
@@ -99,11 +102,17 @@ public class ProductController : Controller
             await _productService.UpdateAsync(
                 id, model.Name, model.Price, model.Stock, model.CategoryId, cancellationToken);
         }
-        catch (NotFoundException ex)
+        catch (NotFoundException ex) when (ex.EntityName == nameof(Category))
         {
-            ModelState.AddModelError(string.Empty, ex.Message);
+            ModelState.AddModelError(nameof(model.CategoryId), ex.Message);
             model.Categories = await LayDanhSachDanhMucAsync(cancellationToken);
             return View(model);
+        }
+        catch (NotFoundException)
+        {
+            // Không tìm thấy chính SẢN PHẨM đang sửa -> render lại form là vô
+            // nghĩa, phải trả 404.
+            return NotFound();
         }
 
         TempData["Success"] = $"Đã cập nhật sản phẩm '{model.Name}'.";
