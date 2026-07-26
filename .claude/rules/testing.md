@@ -20,6 +20,10 @@
 - Mô phỏng "hai người dùng" bằng **hai DI scope riêng**, không dùng chung một scope: mỗi
   scope có một `DbContext` với Change Tracker riêng. Dùng chung thì hai bên nhìn cùng một
   entity trong bộ nhớ và không xung đột nào xảy ra — test xanh vô nghĩa.
+- Markup có hook `data-*` cho JavaScript: mỗi hook phải có test khẳng định nó còn trong
+  HTML (dùng `[Theory]` liệt kê từng cái). Đổi tên hook trong Razor làm JS im lặng ngừng
+  chạy — không lỗi build, không lỗi runtime. Khi chưa có Playwright thì đây là cách duy
+  nhất kiểm soát được file JS.
 - Regex đọc HTML trong test **không được phụ thuộc thứ tự thuộc tính**. `asp-items` render
   `<option selected="selected" value="1">` (selected TRƯỚC value); regex
   `<option value="..." selected` trượt, trường về rỗng, ModelState invalid, và request

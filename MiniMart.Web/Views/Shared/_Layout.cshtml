@@ -1,8 +1,9 @@
 ﻿@inject MiniMart.Application.Interfaces.ICartService CartService
 @{
     // Đọc một lần cho cả layout. Đặt trong @{} chứ không gọi trực tiếp trong
-    // markup để tránh gọi hai lần (một lần cho @if, một lần cho @badge).
-    var SoMonTrongGio = (await CartService.GetCartAsync()).TotalQuantity;
+    // markup để tránh gọi hai lần (một lần cho badge, một lần cho dropdown).
+    var GioHang = await CartService.GetCartAsync();
+    var SoMonTrongGio = GioHang.TotalQuantity;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -55,14 +56,40 @@
                             tốn một truy vấn DB mỗi trang. Đổi lại là số món luôn đúng mà
                             không cần JavaScript.
                         *@
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Cart" asp-action="Index">
+                        <li class="nav-item dropdown">
+                            @*
+                                Icon là nút mở dropdown; link tới trang /Cart đầy đủ nằm ở
+                                cuối dropdown. Không bật data-bs-auto-close="outside" vì bấm
+                                nút +/- bên trong KHÔNG được làm đóng dropdown, mà Bootstrap
+                                mặc định đóng khi click ra ngoài menu - nút của ta nằm trong
+                                menu nên mặc định đã đúng.
+                            *@
+                            <a class="nav-link text-dark position-relative" href="#" role="button"
+                               id="cartDropdownToggle" data-bs-toggle="dropdown" aria-expanded="false"
+                               aria-label="Giỏ hàng">
+                                @* SVG nội tuyến: không thêm bootstrap-icons chỉ để lấy một icon,
+                                   và CSP của dự án không cho tải asset từ host ngoài. *@
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                     viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                    <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .485.379L2.89 3H14.5a.5.5 0 0 1 .49.598l-1 5a.5.5 0 0 1-.465.401l-9.397.472L4.415 11H13a.5.5 0 0 1 0 1H4a.5.5 0 0 1-.491-.408L2.01 3.607 1.61 2H.5a.5.5 0 0 1-.5-.5zM5 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-7 1a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
+                                </svg>
                                 Giỏ hàng
-                                @if (SoMonTrongGio > 0)
-                                {
-                                    <span class="badge rounded-pill bg-danger">@SoMonTrongGio</span>
-                                }
+                                @*
+                                    Badge LUÔN được render (ẩn khi = 0) thay vì bọc trong @if:
+                                    JS cần một node có sẵn để gán textContent. Bọc trong @if thì
+                                    lần đầu thêm hàng vào giỏ rỗng sẽ không có node nào để cập
+                                    nhật, và JS buộc phải tự tạo thẻ.
+                                *@
+                                <span class="badge rounded-pill bg-danger" data-cart-count
+                                      hidden="@(SoMonTrongGio == 0 ? "hidden" : null)">@SoMonTrongGio</span>
                             </a>
+
+                            <div class="dropdown-menu dropdown-menu-end p-0 shadow"
+                                 style="width: min(420px, 92vw);"
+                                 aria-labelledby="cartDropdownToggle"
+                                 data-cart-dropdown-container>
+                                <partial name="_CartDropdown" model="new MiniMart.Web.Models.CartTableViewModel(GioHang)" />
+                            </div>
                         </li>
 
                         @if (User.Identity?.IsAuthenticated == true)
@@ -107,6 +134,8 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    @* Dropdown giỏ hàng có ở mọi trang nên script nạp ở layout, không ở section Scripts. *@
+    <script src="~/js/cart-dropdown.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

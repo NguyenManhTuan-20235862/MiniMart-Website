@@ -46,10 +46,16 @@
             {
                 <span class="badge bg-success align-self-start mb-2">Còn hàng</span>
 
-                @* Form POST thường, KHÔNG cần JavaScript: CartController nhận cả
-                   request AJAX và form thường (Post-Redirect-Get). Form tag helper
-                   tự chèn antiforgery token khi có asp-action. *@
-                <form asp-area="" asp-controller="Cart" asp-action="Add" method="post">
+                @*
+                    Vẫn là form POST thường và VẪN chạy khi tắt JavaScript: CartController
+                    nhận cả request AJAX và form thường (Post-Redirect-Get). Form tag
+                    helper tự chèn antiforgery token khi có asp-action.
+
+                    data-cart-add chỉ là dấu để cart-dropdown.js chặn submit và gửi bằng
+                    fetch. Không có JS thì thuộc tính này vô nghĩa và form submit như cũ -
+                    đó là progressive enhancement, không phải hai đường code song song.
+                *@
+                <form asp-area="" asp-controller="Cart" asp-action="Add" method="post" data-cart-add>
                     <input type="hidden" name="ProductId" value="@Model.Id" />
                     <input type="hidden" name="Quantity" value="1" />
                     <button type="submit" class="btn btn-sm btn-primary w-100">Thêm vào giỏ</button>

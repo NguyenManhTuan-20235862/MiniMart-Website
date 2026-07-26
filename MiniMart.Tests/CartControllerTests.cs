@@ -371,18 +371,37 @@ public class CartControllerTests : IAsyncLifetime
 
         var html = await client.GetStringAsync("/");
 
-        Assert.Matches("""badge rounded-pill bg-danger">\s*3\s*<""", html);
+        // Tìm THẺ trước rồi bóc nội dung sau. Bản cũ khớp trực tiếp
+        // `bg-danger">\s*3` nên trượt ngay khi navbar có thêm thuộc tính
+        // data-cart-count chen vào giữa class và dấu '>' - đúng cái bẫy
+        // "regex phụ thuộc thứ tự thuộc tính" mà quy ước test đã ghi.
+        var the = Regex.Match(html, "<span[^>]*data-cart-count[^>]*>([^<]*)</span>");
+
+        Assert.True(the.Success, "Không tìm thấy badge giỏ hàng trên navbar.");
+        Assert.Equal("3", the.Groups[1].Value.Trim());
+
+        // Vẫn khẳng định class hiển thị để nó không bị bỏ đi trong im lặng.
+        Assert.Contains("badge rounded-pill bg-danger", the.Value);
     }
 
     // ───────────── Helper ─────────────
 
     /// <summary>
-    /// Đếm theo URL, KHÔNG theo mẫu `&lt;form action="..."`: Form tag helper có thể
-    /// render method trước action, và regex phụ thuộc thứ tự thuộc tính sẽ đếm ra 0
-    /// trong khi form vẫn có đủ.
+    /// Đếm dòng trong BẢNG giỏ hàng của trang /Cart.
+    ///
+    /// <para>
+    /// Đếm theo `action="/Cart/Remove"` chứ không theo chuỗi trần `/Cart/Remove`: từ khi
+    /// navbar có dropdown giỏ hàng, chuỗi đó còn xuất hiện ở `data-url-remove` của
+    /// dropdown nên đếm trần sẽ ra số lớn hơn thật.
+    /// </para>
+    /// <para>
+    /// Cũng không đếm theo mẫu `&lt;form action="..."`: Form tag helper có thể render
+    /// method trước action, và regex phụ thuộc thứ tự thuộc tính sẽ đếm ra 0 trong khi
+    /// form vẫn có đủ. Bám vào cặp thuộc tính-giá trị là bám vào thứ không đổi.
+    /// </para>
     /// </summary>
     private static int DemDongGioHang(string html) =>
-        Regex.Matches(html, Regex.Escape("/Cart/Remove")).Count;
+        Regex.Matches(html, Regex.Escape("action=\"/Cart/Remove\"")).Count;
 
     private static string? LayHeader(HttpResponseMessage response, string name) =>
         response.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;

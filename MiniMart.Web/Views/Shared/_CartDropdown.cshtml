@@ -1,0 +1,119 @@
+@model CartTableViewModel
+@*
+    Dropdown giỏ hàng trên navbar.
+
+    Mọi hook cho JavaScript là thuộc tính data-*, KHÔNG phải class hay id:
+    class dùng để tạo kiểu (Bootstrap có thể đổi), còn id không lặp lại được cho
+    nhiều dòng. Đổi class để làm đẹp thì không được làm hỏng JavaScript.
+
+    Markup thẻ sản phẩm được định nghĩa DUY NHẤT ở đây. JavaScript chỉ gán
+    textContent vào node có sẵn và xoá node - nó không bao giờ tạo thẻ HTML, nên
+    không có bản sao markup thứ hai và không có bề mặt XSS mới.
+*@
+
+<div class="cart-dropdown" data-cart-dropdown
+     data-url-update="@Url.Action("UpdateQuantity", "Cart")"
+     data-url-remove="@Url.Action("Remove", "Cart")"
+     data-url-dropdown="@Url.Action("Dropdown", "Cart")">
+
+    @*
+        Ô thông báo luôn được render nhưng để rỗng: JS đổ chữ vào đây (thông báo kẹp
+        số lượng, hết hàng...). Không đặt sẵn chữ tiếng Việt nào để nó không lẫn vào
+        các assert của test khi dropdown đang ẩn.
+    *@
+    <div class="alert alert-warning small m-2 py-2 px-3" data-cart-notice hidden></div>
+
+    @if (Model.Cart.IsEmpty)
+    {
+        <div class="px-3 py-4 text-center text-muted small">
+            Giỏ hàng đang trống.
+            <div class="mt-2">
+                <a class="btn btn-sm btn-outline-primary" asp-controller="Home" asp-action="Index">
+                    Xem sản phẩm
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div data-cart-lines style="max-height: 320px; overflow-y: auto;">
+            @foreach (var line in Model.Cart.Lines)
+            {
+                <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom"
+                     data-cart-line data-product-id="@line.ProductId">
+
+                    @if (!string.IsNullOrEmpty(line.ImageUrl))
+                    {
+                        <img src="@line.ImageUrl" alt="@line.Name"
+                             style="width: 40px; height: 40px; object-fit: contain; flex: 0 0 auto;" />
+                    }
+
+                    <div class="flex-grow-1 min-width-0">
+                        <div class="text-truncate small">@line.Name</div>
+
+                        @* Chỉ TRẠNG THÁI còn/hết hàng, không in con số tồn kho. *@
+                        @if (line.ExceedsStock)
+                        {
+                            <span class="badge bg-danger">Không đủ hàng</span>
+                        }
+                        else if (!line.InStock)
+                        {
+                            <span class="badge bg-secondary">Hết hàng</span>
+                        }
+
+                        <div class="text-muted" style="font-size: .75rem;">
+                            @line.UnitPrice.ToMoneyText() đ
+                        </div>
+                    </div>
+
+                    <div class="btn-group btn-group-sm flex-nowrap" role="group"
+                         aria-label="Số lượng @line.Name">
+                        @*
+                            type="button": nút nằm ngoài form nên mặc định đã là button,
+                            nhưng ghi rõ để nếu sau này ai bọc nó vào form thì không biến
+                            thành submit và tải lại trang.
+
+                            Không đặt disabled cho nút "+" theo tồn kho: đó là kiểm tra
+                            phía client mà tồn kho có thể đã đổi, và làm vậy buộc phải
+                            gửi con số tồn kho xuống client. Server kẹp rồi báo về.
+                        *@
+                        <button type="button" class="btn btn-outline-secondary"
+                                data-cart-action="decrease" aria-label="Giảm số lượng @line.Name">−</button>
+
+                        <span class="btn btn-outline-secondary disabled" style="min-width: 2.5rem;"
+                              data-cart-quantity>@line.Quantity</span>
+
+                        <button type="button" class="btn btn-outline-secondary"
+                                data-cart-action="increase" aria-label="Tăng số lượng @line.Name">+</button>
+                    </div>
+
+                    <div class="text-end small fw-bold" style="min-width: 5.5rem;">
+                        <span data-cart-line-total>@line.LineTotal.ToMoneyText()</span> đ
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-link text-danger p-0"
+                            data-cart-action="remove" aria-label="Xoá @line.Name khỏi giỏ">&times;</button>
+                </div>
+            }
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top">
+            <span class="small text-muted">Tổng cộng</span>
+            <span class="fw-bold text-danger">
+                <span data-cart-total>@Model.Cart.TotalAmount.ToMoneyText()</span> đ
+            </span>
+        </div>
+
+        <div class="px-3 pb-3 pt-1">
+            <a class="btn btn-sm btn-primary w-100" asp-controller="Cart" asp-action="Index">
+                Xem giỏ hàng
+            </a>
+        </div>
+    }
+
+    @*
+        Antiforgery token cho fetch(). Nằm TRONG partial nên khi JS thay cả dropdown
+        bằng HTML mới, token mới đi kèm luôn - không có chuyện token cũ bị dùng lại.
+    *@
+    @Html.AntiForgeryToken()
+</div>

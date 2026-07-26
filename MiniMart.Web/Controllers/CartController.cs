@@ -51,6 +51,24 @@ public class CartController : Controller
         return Json(CartSummaryDto.From(cart));
     }
 
+    /// <summary>
+    /// HTML của dropdown giỏ hàng trên navbar.
+    ///
+    /// <para>
+    /// Đây là lý do các endpoint ghi được phép trả JSON: việc DỰNG MARKUP vẫn nằm trọn
+    /// trong Razor (<c>_CartDropdown.cshtml</c>), client chỉ gọi tới đây khi cần dựng
+    /// lại cả danh sách - lúc mở dropdown, hoặc sau khi giỏ đổi cấu trúc (thêm dòng
+    /// mới, giỏ trở thành rỗng). JavaScript không bao giờ tạo thẻ HTML nào.
+    /// </para>
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> Dropdown(CancellationToken cancellationToken)
+    {
+        var cart = await _cartService.GetCartAsync(cancellationToken);
+
+        return PartialView("_CartDropdown", new CartTableViewModel(cart));
+    }
+
     // ───────────── Ghi ─────────────
 
     [HttpPost]
@@ -58,6 +76,7 @@ public class CartController : Controller
     public Task<IActionResult> Add(AddToCartRequest request, CancellationToken cancellationToken) =>
         ThucHienAsync(
             () => _cartService.AddAsync(request.ProductId, request.Quantity, cancellationToken),
+            request.ProductId,
             cancellationToken);
 
     [HttpPost]
@@ -67,6 +86,7 @@ public class CartController : Controller
         CancellationToken cancellationToken) =>
         ThucHienAsync(
             () => _cartService.UpdateQuantityAsync(request.ProductId, request.Quantity, cancellationToken),
+            request.ProductId,
             cancellationToken);
 
     /// <remarks>
@@ -81,6 +101,7 @@ public class CartController : Controller
         CancellationToken cancellationToken) =>
         ThucHienAsync(
             () => _cartService.RemoveAsync(request.ProductId, cancellationToken),
+            request.ProductId,
             cancellationToken);
 
     // ───────────── Hạ tầng dùng chung ─────────────
@@ -96,6 +117,7 @@ public class CartController : Controller
     /// </summary>
     private async Task<IActionResult> ThucHienAsync(
         Func<Task<CartMutationResult>> thaoTac,
+        int productId,
         CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
@@ -105,14 +127,14 @@ public class CartController : Controller
                 .Select(e => e.ErrorMessage)
                 .FirstOrDefault() ?? "Yêu cầu không hợp lệ.";
 
-            return await TraKetQuaAsync(loi, cancellationToken);
+            return await TraKetQuaAsync(loi, productId, cancellationToken);
         }
 
         try
         {
             var ketQua = await thaoTac();
 
-            return TraKetQua(ketQua.Cart, ketQua.Notice);
+            return TraKetQua(ketQua.Cart, productId, ketQua.Notice);
         }
         // Ba nhánh dưới đây đều là KẾT CỤC NGHIỆP VỤ bình thường, không phải lỗi
         // hệ thống: người dùng mở trang từ lâu rồi mới bấm, trong lúc đó shop đã
@@ -120,12 +142,14 @@ public class CartController : Controller
         // thường thành sự cố; đúng cách là trả về giỏ hàng kèm lời giải thích.
         catch (OutOfStockException ex)
         {
-            return await TraKetQuaAsync(ex.Message, cancellationToken);
+            return await TraKetQuaAsync(ex.Message, productId, cancellationToken);
         }
         catch (NotFoundException)
         {
             return await TraKetQuaAsync(
-                "Sản phẩm không còn tồn tại và đã được bỏ khỏi danh sách.", cancellationToken);
+                "Sản phẩm không còn tồn tại và đã được bỏ khỏi danh sách.",
+                productId,
+                cancellationToken);
         }
         catch (DuplicateKeyException)
         {
@@ -133,23 +157,32 @@ public class CartController : Controller
             // UNIQUE(Carts.UserId) chặn cái thứ hai. Thử lại sạch sẽ đòi một
             // DbContext mới nên không làm được trong cùng request; bảo người dùng
             // bấm lại là đủ, vì lúc đó giỏ đã tồn tại.
-            return await TraKetQuaAsync("Vui lòng thử lại.", cancellationToken);
+            return await TraKetQuaAsync("Vui lòng thử lại.", productId, cancellationToken);
         }
     }
 
-    private async Task<IActionResult> TraKetQuaAsync(string notice, CancellationToken cancellationToken)
+    private async Task<IActionResult> TraKetQuaAsync(
+        string notice,
+        int productId,
+        CancellationToken cancellationToken)
     {
         var cart = await _cartService.GetCartAsync(cancellationToken);
 
-        return TraKetQua(cart, notice);
+        return TraKetQua(cart, productId, notice);
     }
 
     /// <summary>
-    /// Hai đường trả kết quả cho cùng một thao tác:
+    /// BA đường trả kết quả cho cùng một thao tác, phân biệt bằng header của request:
     ///
     /// <para>
-    /// - Request AJAX (có header <c>X-Requested-With</c>) → <c>PartialView</c>,
-    ///   vì trình duyệt đã có sẵn trang, chỉ cần thay phần bảng.
+    /// - <c>Accept: application/json</c> → <c>Json</c>. Dùng bởi dropdown giỏ hàng trên
+    ///   navbar: nó chỉ cần đổi vài con số tại chỗ, thay cả khối HTML sẽ làm dropdown
+    ///   nhấp nháy và mất vị trí cuộn. Xem <see cref="CartMutationDto"/> để biết hai
+    ///   ràng buộc giữ cho nhánh này không vi phạm tinh thần quy ước.
+    /// </para>
+    /// <para>
+    /// - <c>X-Requested-With: XMLHttpRequest</c> → <c>PartialView</c>, vì trình duyệt
+    ///   đã có sẵn trang, chỉ cần thay phần bảng.
     /// </para>
     /// <para>
     /// - Form POST thường → <c>RedirectToAction</c> theo Post-Redirect-Get, thông
@@ -157,14 +190,24 @@ public class CartController : Controller
     ///   JavaScript sẽ nhận về một mảnh HTML rời làm cả trang, và bấm F5 sẽ hỏi
     ///   gửi lại form.
     /// </para>
+    /// <para>
+    /// Thứ tự kiểm tra quan trọng: <c>fetch</c> của dropdown gửi CẢ HAI header, nên
+    /// nhánh JSON phải được xét TRƯỚC. Đảo lại thì dropdown nhận về HTML và JS đọc
+    /// <c>response.json()</c> sẽ ném.
+    /// </para>
     /// </summary>
-    private IActionResult TraKetQua(CartView cart, string? notice)
+    private IActionResult TraKetQua(CartView cart, int productId, string? notice)
     {
         // Header chỉ chứa chữ số ASCII nên an toàn. Thông báo tiếng Việt thì KHÔNG
         // đi qua header được (giá trị header phải là ASCII/latin1) - nó nằm trong
-        // thân response, xem CartTableViewModel.
+        // thân response, xem CartTableViewModel và CartMutationDto.
         Response.Headers[CartCountHeader] =
             cart.TotalQuantity.ToString(CultureInfo.InvariantCulture);
+
+        if (MuonJson())
+        {
+            return Json(CartMutationDto.From(cart, productId, notice));
+        }
 
         if (!LaRequestAjax())
         {
@@ -177,4 +220,16 @@ public class CartController : Controller
 
     private bool LaRequestAjax() =>
         Request.Headers.XRequestedWith == "XMLHttpRequest";
+
+    /// <remarks>
+    /// Không dùng <c>Request.Headers.Accept == "application/json"</c>: trình duyệt gửi
+    /// cả danh sách có q-value nên so bằng sẽ trượt. Cũng không dùng content negotiation
+    /// tự động của MVC - ở đây hai nhánh trả về HAI kiểu dữ liệu khác nhau
+    /// (<c>CartMutationDto</c> và <c>_CartTable</c>), không phải cùng một object hai
+    /// định dạng, nên phải tự rẽ.
+    /// </remarks>
+    private bool MuonJson() =>
+        Request.Headers.Accept.Any(giaTri =>
+            giaTri is not null &&
+            giaTri.Contains("application/json", StringComparison.OrdinalIgnoreCase));
 }

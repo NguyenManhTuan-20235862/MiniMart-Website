@@ -67,6 +67,9 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 | `Task.WhenAll` nhiều `await` dùng chung `DbContext` | "A second operation was started" |
 | Factory chọn nhầm kho giỏ hàng | Giỏ vẫn chạy, chỉ là mất dữ liệu |
 | Thiếu `ConvertValueInInvariantCulture` ở `[Range]` tiền | Máy vi-VN parse `"0.01"` sai |
+| Đổi tên một `data-*` mà JS đang `querySelector` | `null` → JS ngừng chạy, không lỗi nào |
+| Bọc node JS cần cập nhật trong `@if` | Lần đầu cần cập nhật thì không có node |
+| Xét nhánh PartialView trước nhánh JSON | Client nhận HTML, `response.json()` ném |
 
 ## Môi trường
 - .NET SDK 10, SQL Server 2025 Express, instance `SQLEXPRESS`.
@@ -103,16 +106,19 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
   người, không có hai người cùng sửa một giỏ. Trường hợp duy nhất là một người mở hai tab,
   và ở đó "ghi sau thắng" đúng ý muốn của họ. Việc cần khoá thật là **trừ tồn kho lúc đặt
   hàng** — nhưng khoá trên `Products.RowVersion` (đã có), không phải trên giỏ.
-- **Giỏ hàng chưa có JavaScript.** Endpoint đã trả `PartialView` và header `X-Cart-Count`
-  cho AJAX, nhưng chưa có file JS nào gọi tới. Hiện chạy hoàn toàn bằng form POST + PRG nên
-  **không có gì hỏng** — chỉ là mỗi thao tác phải tải lại trang.
+- Nhánh **`PartialView` của ba endpoint ghi giỏ hàng** (`X-Requested-With` mà không kèm
+  `Accept: application/json`) hiện **không có client nào dùng** — dropdown dùng nhánh JSON,
+  trang `/Cart` dùng nhánh PRG. Giữ lại vì nó là đường tự nhiên nếu sau này trang `/Cart`
+  cần cập nhật cả bảng bằng AJAX, và nó có test. Đừng xoá mà cũng đừng tưởng nó đang chạy.
 
 ### Nợ thật, chưa trả
-- **`wwwroot/js/home-load-more.js` KHÔNG có test tự động** — dự án chưa có headless browser
-  (Playwright). Kiểm chứng được: HTML mà `/Product/LoadMore` trả về, header `X-Next-Page`,
-  `data-*` trên nút (integration test), cú pháp JS (`node --check`). Chưa kiểm chứng được:
-  `insertAdjacentHTML` chạy thật, cập nhật `shownCount`, xoá nút khi hết dữ liệu, chặn
-  double-click. Đây là khoảng trống test lớn nhất còn lại; thêm Playwright đáng một phase riêng.
+- **Hai file JS KHÔNG có test chạy thật** (`home-load-more.js`, `cart-dropdown.js`) — dự án
+  chưa có headless browser (Playwright). Kiểm chứng được: HTML mà endpoint trả về, hình
+  dạng JSON, header `X-Next-Page`/`X-Cart-Count`, sự tồn tại của từng hook `data-*`
+  (integration test), cú pháp JS (`node --check`). **Chưa** kiểm chứng được: `fetch` chạy
+  thật, `insertAdjacentHTML`/`textContent` cập nhật đúng node, cờ chặn double-click, cờ
+  `canDungLai` của dropdown, việc gỡ node khi xoá dòng. Đây là khoảng trống test lớn nhất
+  còn lại; thêm Playwright đáng một phase riêng.
 - **CI chưa từng chạy thật.** File `.github/workflows/ci.yml` đã viết nhưng chỉ xác nhận
   được phần chạy được ở local (`dotnet format --verify-no-changes` sạch, `dotnet test` xanh).
   Service container SQL Server, `sqlcmd` trong image `mssql/server:2022-latest`, và

@@ -77,6 +77,41 @@ Quy tắc mặc định của dự án: request AJAX mà kết quả **chỉ đ�
 - Chỉ chọn `Json()` khi thật sự có **client không phải trình duyệt** (mobile app), hoặc
   client cần dữ liệu để tính toán chứ không phải để hiển thị. Ngoại lệ đã áp dụng:
   `/Cart/Summary` trả `Json` vì badge cần một CON SỐ, không cần một khối HTML.
+
+### Ngoại lệ thứ hai: cập nhật TẠI CHỖ vài con số (dropdown giỏ hàng)
+Ba endpoint ghi của giỏ hàng (`/Cart/Add`, `/Cart/UpdateQuantity`, `/Cart/Remove`) trả
+`Json` khi request có `Accept: application/json`. Lý do: dropdown chỉ cần đổi số lượng
+của một dòng, thành tiền dòng đó, tổng cộng và badge. Thay cả khối HTML làm dropdown
+nhấp nháy và mất vị trí cuộn.
+
+Ngoại lệ này chỉ hợp lệ khi giữ ĐỦ HAI ràng buộc dưới đây. Thiếu một trong hai là quay
+về đúng cái mà quy ước muốn tránh — **đừng nới ra**:
+
+1. **Server định dạng sẵn mọi số tiền** trong DTO (`TotalText`, `LineTotalText` qua
+   `MoneyFormat`). JavaScript TUYỆT ĐỐI không tự format tiền, không tự cộng trừ tổng.
+   Bỏ `TotalText` đi là cách in tiền tồn tại ở hai nơi rồi lệch nhau theo locale.
+2. **DTO chỉ đủ để GÁN vào node có sẵn, không đủ để dựng markup.** Việc dựng HTML vẫn
+   thuộc Razor: `GET /Cart/Dropdown` trả `_CartDropdown`. Chia việc theo LOẠI thay đổi —
+   đổi con số thì JSON, đổi cấu trúc (thêm dòng, giỏ thành rỗng) thì tải lại partial.
+   Vì vậy DTO trả về **đúng dòng vừa tác động**, không trả cả giỏ: trả cả giỏ sẽ dụ người
+   viết JS lặp qua nó và dựng lại danh sách.
+
+Hệ quả về markup và test:
+- Hook cho JavaScript là thuộc tính **`data-*`**, không phải `class` (class để tạo kiểu,
+  Bootstrap có thể đổi) và không phải `id` (không lặp lại được cho nhiều dòng).
+- Đổi tên một `data-*` trong Razor làm `querySelector` trả `null` và JS **im lặng ngừng
+  hoạt động** — không lỗi build, không lỗi runtime. Vì vậy mỗi hook phải có test khẳng
+  định nó còn trong HTML (`[Theory]` liệt kê từng hook). Đây là cách duy nhất kiểm soát
+  được file JS khi dự án chưa có Playwright.
+- Node mà JS cần cập nhật phải **luôn được server render**, chỉ ẩn/hiện. Badge giỏ hàng
+  KHÔNG được bọc trong `@if (count > 0)`: lần đầu thêm hàng vào giỏ rỗng sẽ không có node
+  nào để gán `textContent` và JS buộc phải tự tạo thẻ.
+- Endpoint có nhiều nhánh response thì **thứ tự kiểm tra là một phần của hợp đồng**:
+  `fetch` của dropdown gửi cả `Accept: application/json` và `X-Requested-With`, nên nhánh
+  JSON phải xét TRƯỚC nhánh PartialView. Đảo lại thì client nhận HTML và `response.json()`
+  ném ở chỗ chẳng liên quan.
+- Không so bằng `Request.Headers.Accept == "application/json"`: trình duyệt gửi cả danh
+  sách kèm q-value nên so bằng sẽ trượt. Dùng `Contains`.
 - KHÔNG dùng `View()` cho loại request này — nó gửi lại cả layout. Mỗi endpoint trả
   partial phải có test khẳng định response **không** chứa `<!DOCTYPE`/`<html`/`navbar`;
   `PartialView` → `View` là lỗi build-được-nhưng-sai, chỉ test mới bắt.
