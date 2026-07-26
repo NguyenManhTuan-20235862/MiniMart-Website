@@ -61,12 +61,18 @@ kiểm `1 >= 1`, cùng ghi `0` → bán 2 cái khi chỉ có 1, **không excepti
 dự án là có chủ đích). `ITransaction` (Domain) bọc `IDbContextTransaction`; `await using` +
 `CommitAsync` tường minh, không commit thì Dispose rollback.
 
-**Sự thật đã kiểm chứng bằng mutation test**: bỏ hẳn transaction tường minh thì **cả 5
-integration test vẫn xanh**. Lý do là mọi thao tác ghi đi qua **một** `SaveChangesAsync`,
-mà EF Core đã tự bọc mỗi `SaveChanges` trong một transaction ngầm. Nên hôm nay transaction
-tường minh **chưa phải** thứ tạo ra tính nguyên tử — nó trở thành thứ chịu lực ngay khi có
-`SaveChanges` thứ hai (ví dụ thêm bản ghi thanh toán). Giữ nó, nhưng đừng nói nó đang bảo
-vệ atomicity.
+**Đã đo bằng ba mutation, và kết luận tinh tế hơn "có transaction là an toàn":**
+
+| Mutation | Kết quả | Nghĩa là |
+|---|---|---|
+| Bỏ transaction tường minh (giữ 1 `SaveChanges`) | tất cả xanh | Với hình dạng code HIỆN TẠI nó dư: EF Core đã tự bọc mỗi `SaveChanges` trong transaction ngầm |
+| `SaveChanges` trong vòng lặp (giữ transaction) | tất cả xanh | Transaction ĐÃ cứu: A bị ghi thật rồi bị rollback khi B ném |
+| `SaveChanges` trong vòng lặp + bỏ transaction | **đỏ: tồn kho A còn 8 thay vì 10** | Đơn "nửa vời" thật — trừ kho mà không có đơn |
+
+Nên phát biểu đúng là: transaction tường minh **hôm nay không phải** thứ tạo ra tính nguyên
+tử (một `SaveChanges` đã tự nguyên tử), nhưng nó là **lưới an toàn** biến một refactor sai
+kinh điển — "lưu từng món cho chắc" — từ bug dữ liệu thành chuyện không xảy ra. Đó là lý do
+giữ nó, chứ không phải vì nó đang gánh atomicity.
 
 ### Test concurrency phải trông như thế nào
 - SQL Server **thật**, `Task.WhenAll`, mỗi "người mua" một **DI scope riêng** (DbContext
@@ -80,3 +86,26 @@ vệ atomicity.
 - Bài học từ mutation test: bỏ kiểm `Stock < Quantity` ở Service thì tồn kho **vẫn không
   âm** (CHECK constraint chặn) nên mọi assert về SỐ LƯỢNG vẫn xanh — chỉ **kiểu exception**
   đổi. Không assert kiểu exception thì mutation đó lọt qua toàn bộ test tích hợp.
+
+### Giỏ nhiều món, một món hỏng: hai đường rất khác nhau
+Giỏ A(1), B(2), C(3) xử lý theo `ProductId` tăng dần, B là món hỏng:
+
+- **Thiếu hàng thấy được lúc đọc** → ném ở giữa vòng lặp, **vượt qua** `AddAsync` và
+  `SaveChangesAsync`. `A.Stock` đã bị trừ nhưng CHỈ trong Change Tracker; C chưa được chạm.
+  Không có gì để rollback vì không có gì từng được ghi. Cái bảo vệ ở đây là "`SaveChanges`
+  là thứ duy nhất biết ghi, và nó không được gọi".
+- **Thiếu hàng xuất hiện giữa đọc và ghi** → cả 3 qua được lệnh kiểm, `SaveChanges` gửi một
+  batch (3 UPDATE + INSERT Order + 3 INSERT OrderDetail + 3 DELETE CartItem). `RowVersion`
+  của B lệch → UPDATE của B khớp 0 dòng → cả batch bị revert, gồm cả A và C. Đây mới là
+  rollback theo nghĩa đen.
+
+⚠ **Change Tracker vẫn BẨN sau khi ném ở đường 1** (`A.Stock` đang là 8 trong bộ nhớ). Hôm
+nay vô hại vì Controller bắt exception rồi redirect. Nhưng thêm bất kỳ `SaveChanges` nào sau
+đó trong cùng scope — ví dụ "ghi log lần đặt hàng thất bại" — là **A bị trừ kho mà không có
+đơn nào**, im lặng. Muốn log thì phải làm ở scope khác.
+
+📌 `CartItems → Products` là **Cascade**, nên xoá sản phẩm khỏi shop sẽ tự gỡ nó khỏi mọi
+giỏ. Hệ quả: nhánh `NotFoundException` trong `CheckoutAsync` gần như không tới được từ giỏ
+DB — chỉ tới được qua khe race rất hẹp (sản phẩm bị xoá đúng giữa `GetLinesAsync` và
+`GetManyForUpdateAsync`). Một test viết sai vì tưởng nhánh đó dễ chạm đã đỏ và phải sửa lại
+theo hành vi thật: đặt hàng đi tiếp bình thường với các món còn lại.
