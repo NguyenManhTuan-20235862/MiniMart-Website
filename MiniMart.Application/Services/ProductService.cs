@@ -77,6 +77,7 @@ public class ProductService : IProductService
         int stock,
         int categoryId,
         string? imageUrl = null,
+        byte[]? rowVersion = null,
         CancellationToken cancellationToken = default)
     {
         // GetForUpdateAsync (có tracking) chứ không phải GetByIdAsync: entity
@@ -84,6 +85,14 @@ public class ProductService : IProductService
         // kẹp vào WHERE lúc UPDATE.
         var product = await _productRepository.GetForUpdateAsync(id, cancellationToken)
             ?? throw new NotFoundException(nameof(Product), id);
+
+        // Ghim phiên bản người dùng thấy lúc mở form. Không có bước này thì
+        // phiên bản được so là phiên bản VỪA ĐỌC ở dòng trên - luôn khớp, nên
+        // xung đột không bao giờ bị phát hiện (lost update).
+        if (rowVersion is { Length: > 0 })
+        {
+            _productRepository.SetExpectedRowVersion(product, rowVersion);
+        }
 
         await BaoDamDanhMucTonTaiAsync(categoryId, cancellationToken);
 
@@ -99,8 +108,10 @@ public class ProductService : IProductService
             product.ImageUrl = imageUrl;
         }
 
-        // Xung đột RowVersion sẽ ném DbUpdateConcurrencyException từ đây.
-        // Chưa bắt: cách xử lý thuộc phase Concurrency.
+        // Xung đột RowVersion nổi lên từ đây dưới dạng ConcurrencyConflictException
+        // (UnitOfWork đã dịch từ DbUpdateConcurrencyException). CỐ Ý không bắt ở
+        // Service: quyết định "ghi đè hay bỏ" là của người dùng, không phải của
+        // nghiệp vụ - Controller mới có đủ ngữ cảnh để hỏi lại họ.
         await _unitOfWork.SaveChangesAsync(cancellationToken);
     }
 

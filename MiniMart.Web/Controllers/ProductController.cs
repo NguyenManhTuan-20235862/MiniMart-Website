@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using MiniMart.Application.Interfaces;
+using MiniMart.Web.Models;
 
 namespace MiniMart.Web.Controllers;
 
@@ -46,17 +47,15 @@ public class ProductController : Controller
     /// </remarks>
     [HttpGet]
     public async Task<IActionResult> LoadMore(
-        int? categoryId,
-        decimal? minPrice,
-        decimal? maxPrice,
+        ProductFilter filter,
         int page = 1,
         CancellationToken cancellationToken = default)
     {
         // page/pageSize đã được Repository kẹp lại, nên ?page=-5 không làm vỡ SQL.
         var result = await _productService.GetProductsAsync(
-            categoryId: categoryId,
-            minPrice: minPrice,
-            maxPrice: maxPrice,
+            categoryId: filter.CategoryId,
+            minPrice: filter.MinPrice,
+            maxPrice: filter.MaxPrice,
             page: page,
             pageSize: PageSize,
             cancellationToken: cancellationToken);

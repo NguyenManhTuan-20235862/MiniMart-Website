@@ -44,7 +44,16 @@
             }
             else
             {
-                <span class="badge bg-success align-self-start">Còn hàng</span>
+                <span class="badge bg-success align-self-start mb-2">Còn hàng</span>
+
+                @* Form POST thường, KHÔNG cần JavaScript: CartController nhận cả
+                   request AJAX và form thường (Post-Redirect-Get). Form tag helper
+                   tự chèn antiforgery token khi có asp-action. *@
+                <form asp-area="" asp-controller="Cart" asp-action="Add" method="post">
+                    <input type="hidden" name="ProductId" value="@Model.Id" />
+                    <input type="hidden" name="Quantity" value="1" />
+                    <button type="submit" class="btn btn-sm btn-primary w-100">Thêm vào giỏ</button>
+                </form>
             }
         </div>
     </div>

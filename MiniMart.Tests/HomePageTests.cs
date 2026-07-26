@@ -234,6 +234,31 @@ public class HomePageTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Gia_am_bi_bao_loi_bang_Data_Annotation()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync("/?minPrice=-5");
+
+        // Ràng buộc thuộc về bản thân giá trị -> [Range] trên ProductFilter,
+        // không phải kiểm tra trong Service.
+        Assert.Contains("Giá từ phải là số không âm", html);
+    }
+
+    [Fact]
+    public async Task Text_tieng_Viet_KHONG_bi_encode_thanh_entity()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync("/?minPrice=-5");
+
+        // HtmlEncoder mặc định escape mọi ký tự non-ASCII. Nếu không cấu hình
+        // UnicodeRanges.All thì chuỗi này ra "Gi&#xE1; t&#x1EEB;".
+        Assert.DoesNotContain("&#x1EEB;", html);
+        Assert.DoesNotContain("&#xE1;", html);
+    }
+
+    [Fact]
     public async Task Nut_Xem_them_mang_theo_toan_bo_bo_loc()
     {
         using var client = CreateClient();

@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    # Bộ test của dự án CỐ Ý không dùng EF Core InMemory: rowversion, check
+    # constraint, foreign key và unique index là hành vi của database engine,
+    # InMemory không thực thi chúng nên test sẽ xanh kể cả khi code có bug.
+    # Vì vậy CI BẮT BUỘC có SQL Server thật.
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: ${{ secrets.CI_SQL_PASSWORD || 'Ci_MiniMart_2026!' }}
+          MSSQL_PID: Express
+        ports:
+          - 1433:1433
+
+    env:
+      # Máy dev dùng Windows Authentication (Trusted_Connection=True), container
+      # Linux không có nên CI phải dùng SQL Authentication.
+      #
+      # Hai dấu gạch dưới là cách .NET map biến môi trường vào cấu hình lồng nhau:
+      # ConnectionStrings__DefaultConnection -> ConnectionStrings:DefaultConnection.
+      # Nó ghi đè appsettings.json mà KHÔNG phải sửa file, nên máy dev không bị ảnh hưởng.
+      ConnectionStrings__DefaultConnection: >-
+        Server=localhost,1433;Database=MiniMart;User Id=sa;
+        Password=${{ secrets.CI_SQL_PASSWORD || 'Ci_MiniMart_2026!' }};
+        TrustServerCertificate=True
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Chờ SQL Server sẵn sàng
+        # Container báo "started" trước khi engine nhận kết nối. Không chờ thì
+        # bước migration đổ ở lần chạy đầu và CI đỏ ngẫu nhiên.
+        run: |
+          for i in {1..30}; do
+            if /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa \
+                -P "${{ secrets.CI_SQL_PASSWORD || 'Ci_MiniMart_2026!' }}" \
+                -C -Q "SELECT 1" > /dev/null 2>&1; then
+              echo "SQL Server san sang sau ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "SQL Server khong phan hoi sau 30s"; exit 1
+
+      - name: Restore
+        # Dự án dùng Central Package Management: version nằm ở
+        # Directory.Packages.props, restore sẽ đổ nếu file đó thiếu package nào.
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Áp migration lên DB của CI
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.10
+          dotnet ef database update \
+            -p MiniMart.Infrastructure -s MiniMart.Web --no-build --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --logger "console;verbosity=normal"
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Job riêng và KHÔNG cần SQL Server: kiểm tra định dạng theo .editorconfig.
+      # --verify-no-changes làm CI đỏ thay vì tự sửa file, vì CI không được phép
+      # commit hộ - lập trình viên phải chạy `dotnet format` và tự xem diff.
+      - name: Kiểm tra định dạng theo .editorconfig
+        run: dotnet format --verify-no-changes --verbosity diagnostic

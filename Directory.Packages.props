@@ -1,0 +1,42 @@
+<Project>
+
+  <!--
+    Central Package Management (CPM).
+
+    Từ đây, csproj chỉ khai báo <PackageReference Include="..." /> KHÔNG kèm
+    Version; version tập trung ở file này.
+
+    Lý do: trước đây Microsoft.EntityFrameworkCore.SqlServer ở Infrastructure và
+    Microsoft.EntityFrameworkCore.Design ở Web là hai dòng Version độc lập. Nâng
+    một bên mà quên bên kia thì hai phiên bản EF Core cùng tồn tại trong một
+    tiến trình - lỗi biểu hiện lúc chạy, thường ở chỗ chẳng liên quan gì.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+    <!--
+      Chặn csproj tự ghi đè version. Không có dòng này thì một csproj vẫn được
+      phép khai báo Version="..." riêng và CPM mất tác dụng trong im lặng.
+    -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="Runtime">
+    <PackageVersion Include="Dapper" Version="2.1.79" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup Label="Test">
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="Moq" Version="4.20.72" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+</Project>

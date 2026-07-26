@@ -33,14 +33,20 @@ public interface IProductService
         string? imageUrl = null,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Ném DbUpdateConcurrencyException nếu bản ghi đã bị người khác sửa
-    /// (RowVersion lệch). Việc xử lý xung đột thuộc phase Concurrency.
-    /// </summary>
     /// <param name="imageUrl">
     /// null nghĩa là GIỮ NGUYÊN ảnh cũ, không phải xoá ảnh. Người dùng không
     /// chọn file mới thì ảnh hiện tại phải được giữ lại.
     /// </param>
+    /// <param name="rowVersion">
+    /// Phiên bản người dùng thấy lúc MỞ form, do form gửi lại qua hidden field.
+    /// null = bỏ qua kiểm tra xung đột (dùng cho luồng nội bộ không có form).
+    /// </param>
+    /// <exception cref="MiniMart.Common.Exceptions.ConcurrencyConflictException">
+    /// Bản ghi đã bị người khác sửa hoặc xoá sau khi form được mở.
+    /// </exception>
+    /// <exception cref="MiniMart.Common.Exceptions.NotFoundException">
+    /// Không tìm thấy sản phẩm, hoặc danh mục được chọn không tồn tại.
+    /// </exception>
     Task UpdateAsync(
         int id,
         string name,
@@ -48,6 +54,7 @@ public interface IProductService
         int stock,
         int categoryId,
         string? imageUrl = null,
+        byte[]? rowVersion = null,
         CancellationToken cancellationToken = default);
 
     Task DeleteAsync(int id, CancellationToken cancellationToken = default);

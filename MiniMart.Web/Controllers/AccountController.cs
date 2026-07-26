@@ -2,9 +2,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection;
 using MiniMart.Application.Interfaces;
 using MiniMart.Common.Exceptions;
 using MiniMart.Domain.Entities;
+using MiniMart.Domain.Interfaces;
 using MiniMart.Web.Models;
 
 namespace MiniMart.Web.Controllers;
@@ -12,12 +15,24 @@ namespace MiniMart.Web.Controllers;
 public class AccountController : Controller
 {
     private readonly IUserService _userService;
+    private readonly ICartService _cartService;
+    private readonly ICartStore _gioKhach;
+    private readonly ICartStore _gioThanhVien;
 
-    // Chỉ inject IUserService (Application). Controller không hề biết
-    // UserService, UserRepository hay DbContext tồn tại.
-    public AccountController(IUserService userService)
+    // Chỉ inject abstraction: IUserService / ICartService (Application) và
+    // ICartStore (Domain). Controller không hề biết UserService, SessionCartStore,
+    // DatabaseCartStore hay DbContext tồn tại - hai kho được phân biệt bằng KHOÁ,
+    // không bằng tên class.
+    public AccountController(
+        IUserService userService,
+        ICartService cartService,
+        [FromKeyedServices(CartStoreKeys.Session)] ICartStore gioKhach,
+        [FromKeyedServices(CartStoreKeys.Database)] ICartStore gioThanhVien)
     {
         _userService = userService;
+        _cartService = cartService;
+        _gioKhach = gioKhach;
+        _gioThanhVien = gioThanhVien;
     }
 
     [HttpGet]
@@ -29,7 +44,10 @@ public class AccountController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Register(RegisterViewModel model, string? returnUrl = null)
+    public async Task<IActionResult> Register(
+        RegisterViewModel model,
+        string? returnUrl = null,
+        CancellationToken cancellationToken = default)
     {
         if (!ModelState.IsValid)
         {
@@ -41,7 +59,7 @@ public class AccountController : Controller
             var user = await _userService.RegisterAsync(model.Username, model.Password);
 
             // Đăng ký xong đăng nhập luôn, khỏi bắt người dùng nhập lại.
-            await SignInUserAsync(user, isPersistent: false);
+            await SignInUserAsync(user, isPersistent: false, cancellationToken);
 
             return RedirectToLocal(returnUrl);
         }
@@ -60,9 +78,15 @@ public class AccountController : Controller
         return View();
     }
 
+    // Rate limit chỉ đặt trên POST, không đặt trên GET: xem trang đăng nhập là
+    // hành vi bình thường, chỉ việc THỬ mật khẩu mới cần giới hạn.
     [HttpPost]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
+    public async Task<IActionResult> Login(
+        LoginViewModel model,
+        string? returnUrl = null,
+        CancellationToken cancellationToken = default)
     {
         if (!ModelState.IsValid)
         {
@@ -78,7 +102,7 @@ public class AccountController : Controller
             return View(model);
         }
 
-        await SignInUserAsync(user, model.RememberMe);
+        await SignInUserAsync(user, model.RememberMe, cancellationToken);
 
         return RedirectToLocal(returnUrl);
     }
@@ -97,11 +121,17 @@ public class AccountController : Controller
     public IActionResult AccessDenied() => View();
 
     /// <summary>
-    /// Biến một User nghiệp vụ thành danh tính HTTP rồi cấp cookie.
+    /// Biến một User nghiệp vụ thành danh tính HTTP, cấp cookie, rồi gộp giỏ hàng.
     /// Việc này thuộc về Web: nó cần HttpContext, thứ mà tầng Application
     /// không được phép biết đến.
+    ///
+    /// <para>
+    /// Gộp giỏ nằm Ở ĐÂY chứ không ở trong từng action: cả <c>Login</c> và
+    /// <c>Register</c> đều đi qua method này, nên không thể thêm đường đăng nhập
+    /// thứ ba mà quên gộp. Đặt ở mỗi action là hai chỗ để quên.
+    /// </para>
     /// </summary>
-    private async Task SignInUserAsync(User user, bool isPersistent)
+    private async Task SignInUserAsync(User user, bool isPersistent, CancellationToken cancellationToken)
     {
         var claims = new List<Claim>
         {
@@ -132,6 +162,45 @@ public class AccountController : Controller
                 // false -> session cookie, mất khi đóng trình duyệt
                 IsPersistent = isPersistent
             });
+
+        // ★ SignInAsync chỉ GHI COOKIE VÀO RESPONSE. Nó KHÔNG cập nhật
+        // HttpContext.User của request đang chạy - User chỉ được UseAuthentication
+        // gán, mà middleware đó đã chạy xong từ đầu request này.
+        //
+        // Không có dòng dưới đây thì ICurrentUser.Id vẫn null, và DatabaseCartStore
+        // ném InvalidOperationException ngay khi gộp. Gán tay là diễn đạt đúng sự
+        // thật: kể từ giây phút này request ĐÃ có danh tính.
+        HttpContext.User = principal;
+
+        await GopGioHangAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Chuyển giỏ khách vãng lai (Session) vào giỏ thành viên (DB) rồi xoá giỏ cũ.
+    ///
+    /// <para>
+    /// Truyền hai kho TƯỜNG MINH bằng Keyed DI thay vì để factory chọn: gộp là
+    /// thao tác trên cả hai kho cùng lúc, một <c>ICartStore</c> duy nhất không diễn
+    /// đạt được. Đây là chỗ DUY NHẤT trong dự án được phép bỏ qua factory.
+    /// </para>
+    /// </summary>
+    private async Task GopGioHangAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _cartService.MergeAsync(_gioKhach, _gioThanhVien, cancellationToken);
+        }
+        catch (DuplicateKeyException)
+        {
+            // Hai request đồng thời cùng tạo giỏ lần đầu -> UNIQUE(Carts.UserId)
+            // chặn cái thứ hai.
+            //
+            // Bỏ qua có chủ đích, và CHỈ exception này: cookie đăng nhập đã được
+            // ghi vào response ở trên, nên ném ra đây là biến một lần đăng nhập
+            // THÀNH CÔNG thành trang lỗi 500. Mất giỏ vãng lai thì lần đăng nhập
+            // sau gộp lại được (MergeAsync xoá giỏ nguồn SAU khi lưu giỏ đích);
+            // chặn đăng nhập thì không cứu được gì. Lỗi lập trình thật vẫn nổ to.
+        }
     }
 
     /// <summary>

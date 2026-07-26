@@ -1,0 +1,14 @@
+@model CartTableViewModel
+@{
+    ViewData["Title"] = "Giỏ hàng";
+}
+
+<h1 class="h3 mb-4">Giỏ hàng</h1>
+
+@*
+    Toàn bộ bảng nằm trong một container có id, để bước JavaScript sau này chỉ cần
+    thay innerHTML của nó bằng HTML mà /Cart/Add trả về - không phải dựng lại markup.
+*@
+<div id="cartContainer">
+    <partial name="_CartTable" model="Model" />
+</div>

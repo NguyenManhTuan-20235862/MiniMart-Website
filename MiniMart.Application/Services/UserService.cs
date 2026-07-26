@@ -64,6 +64,15 @@ public class UserService : IUserService
         return user;
     }
 
+    /// <summary>
+    /// Hash của một mật khẩu không ai dùng, chỉ để "đốt" thời gian khi username
+    /// không tồn tại. Tính một lần duy nhất cho cả tiến trình (Lazy + static).
+    /// </summary>
+    private static readonly Lazy<string> HashGia = new(() =>
+        new PasswordHasher<User>().HashPassword(
+            new User { Username = string.Empty, PasswordHash = string.Empty },
+            "khong-bao-gio-la-mat-khau-that-cua-ai"));
+
     public async Task<User?> AuthenticateAsync(
         string username,
         string password,
@@ -73,6 +82,21 @@ public class UserService : IUserService
 
         if (user is null)
         {
+            // Vẫn verify một hash giả để thời gian phản hồi không tiết lộ
+            // username có tồn tại hay không.
+            //
+            // Nếu return null ngay tại đây: username SAI trả lời sau ~1ms (chỉ
+            // một query), username ĐÚNG mà sai mật khẩu trả lời sau ~100ms (PBKDF2
+            // 100k vòng). Chênh hai bậc độ lớn, đo được qua mạng -> kẻ tấn công
+            // dò được danh sách username có thật rồi mới tập trung phá mật khẩu.
+            //
+            // Thông báo lỗi ở Controller đã là thông báo CHUNG; bước này bịt kênh
+            // rò rỉ còn lại là THỜI GIAN.
+            _passwordHasher.VerifyHashedPassword(
+                new User { Username = username, PasswordHash = HashGia.Value },
+                HashGia.Value,
+                password);
+
             return null;
         }
 

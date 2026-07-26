@@ -1,4 +1,10 @@
-﻿<!DOCTYPE html>
+﻿@inject MiniMart.Application.Interfaces.ICartService CartService
+@{
+    // Đọc một lần cho cả layout. Đặt trong @{} chứ không gọi trực tiếp trong
+    // markup để tránh gọi hai lần (một lần cho @if, một lần cho @badge).
+    var SoMonTrongGio = (await CartService.GetCartAsync()).TotalQuantity;
+}
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -43,6 +49,22 @@
                     </ul>
 
                     <ul class="navbar-nav">
+                        @*
+                            Badge giỏ hàng. Đọc giỏ ở MỌI trang - đánh đổi đã biết: khách
+                            vãng lai chỉ tốn một lần đọc Session (rẻ), người đã đăng nhập
+                            tốn một truy vấn DB mỗi trang. Đổi lại là số món luôn đúng mà
+                            không cần JavaScript.
+                        *@
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Cart" asp-action="Index">
+                                Giỏ hàng
+                                @if (SoMonTrongGio > 0)
+                                {
+                                    <span class="badge rounded-pill bg-danger">@SoMonTrongGio</span>
+                                }
+                            </a>
+                        </li>
+
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">

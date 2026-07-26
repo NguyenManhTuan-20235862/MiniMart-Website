@@ -1,0 +1,117 @@
+@model CartTableViewModel
+@*
+    Bảng giỏ hàng. Dùng cho CẢ trang /Cart (server render) và response của
+    /Cart/Add, /Cart/UpdateQuantity, /Cart/Remove (AJAX) - đúng một khuôn markup,
+    cùng lý do đã chọn PartialView cho nút "Xem thêm" ở trang chủ.
+
+    Mọi form ở đây là POST và có antiforgery token, kể cả nút xoá.
+*@
+
+@if (Model.Notice is not null)
+{
+    <div class="alert alert-warning" role="alert">@Model.Notice</div>
+}
+
+@if (Model.Cart.IsEmpty)
+{
+    <div class="alert alert-light border">
+        Giỏ hàng đang trống. <a asp-controller="Home" asp-action="Index">Xem sản phẩm</a>
+    </div>
+}
+else
+{
+    @if (Model.Cart.HasStockProblem)
+    {
+        <div class="alert alert-danger">
+            Có sản phẩm trong giỏ vượt quá số lượng còn lại. Giỏ hàng không giữ hàng —
+            hãy điều chỉnh trước khi đặt hàng.
+        </div>
+    }
+
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Sản phẩm</th>
+                    <th scope="col" class="text-end">Đơn giá</th>
+                    <th scope="col" style="width: 190px;">Số lượng</th>
+                    <th scope="col" class="text-end">Thành tiền</th>
+                    <th scope="col"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Model.Cart.Lines)
+                {
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                @if (!string.IsNullOrEmpty(line.ImageUrl))
+                                {
+                                    <img src="@line.ImageUrl" alt="@line.Name"
+                                         style="width: 56px; height: 56px; object-fit: contain;" />
+                                }
+                                <div>
+                                    <div>@line.Name</div>
+                                    @* Chỉ TRẠNG THÁI còn/hết hàng, không in con số tồn kho. *@
+                                    @if (line.ExceedsStock)
+                                    {
+                                        <span class="badge bg-danger">Không đủ hàng</span>
+                                    }
+                                    else if (!line.InStock)
+                                    {
+                                        <span class="badge bg-secondary">Hết hàng</span>
+                                    }
+                                </div>
+                            </div>
+                        </td>
+
+                        <td class="text-end">@line.UnitPrice.ToMoneyText() đ</td>
+
+                        <td>
+                            <form asp-action="UpdateQuantity" method="post" class="d-flex gap-1">
+                                <input type="hidden" name="ProductId" value="@line.ProductId" />
+                                @*
+                                    type="number": giá trị luôn được gửi ở dạng chuẩn hoá bất kể
+                                    locale trình duyệt. Với type="text", người dùng vi-VN gõ dấu
+                                    phân cách sẽ khiến model binding trả về 0 trong im lặng.
+
+                                    max KHÔNG đặt theo tồn kho: đó là kiểm tra phía client, mà
+                                    tồn kho có thể đã đổi. CartService kẹp lại ở server và báo về.
+                                *@
+                                <input type="number" name="Quantity" value="@line.Quantity"
+                                       min="0" max="100" class="form-control form-control-sm"
+                                       style="width: 80px;" aria-label="Số lượng @line.Name" />
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">Cập nhật</button>
+                            </form>
+                        </td>
+
+                        <td class="text-end fw-bold">@line.LineTotal.ToMoneyText() đ</td>
+
+                        <td class="text-end">
+                            @* Xoá BẮT BUỘC là POST: nếu là GET thì chỉ cần nhúng một thẻ img
+                               trỏ tới URL này là xoá được giỏ của người khác. *@
+                            <form asp-action="Remove" method="post">
+                                <input type="hidden" name="ProductId" value="@line.ProductId" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Xoá</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3" class="text-end fw-bold">Tổng cộng</td>
+                    <td class="text-end fw-bold text-danger">
+                        @Model.Cart.TotalAmount.ToMoneyText() đ
+                    </td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <p class="text-muted small">
+        Tổng <span id="cartCount">@Model.Cart.TotalQuantity</span> món.
+        Giá hiển thị là giá hiện tại, chốt lại khi đặt hàng.
+    </p>
+}

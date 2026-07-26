@@ -39,6 +39,14 @@ public static class DependencyInjection
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();
 
+        // Đăng ký bằng CHÍNH class, không phải qua ICartStore.
+        //
+        // Lý do: ICartStore có HAI cài đặt và việc chọn cái nào phụ thuộc người
+        // dùng đã đăng nhập hay chưa - thứ mà tầng Infrastructure không biết.
+        // Quyết định đó nằm ở Composition Root (Program.cs), và factory ở đó cần
+        // resolve được đúng class này. Không đăng ký thì factory ném lúc chạy.
+        services.AddScoped<DatabaseCartStore>();
+
         return services;
     }
 }

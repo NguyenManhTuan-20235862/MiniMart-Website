@@ -101,7 +101,11 @@ public class ProductServiceTests
     {
         var product = new Product
         {
-            Id = 1, Name = "Cu", Price = 1m, Stock = 1, CategoryId = 1,
+            Id = 1,
+            Name = "Cu",
+            Price = 1m,
+            Stock = 1,
+            CategoryId = 1,
             ImageUrl = "/images/products/cu.jpg"
         };
         _productRepository
@@ -122,7 +126,11 @@ public class ProductServiceTests
     {
         var product = new Product
         {
-            Id = 1, Name = "Cu", Price = 1m, Stock = 1, CategoryId = 1,
+            Id = 1,
+            Name = "Cu",
+            Price = 1m,
+            Stock = 1,
+            CategoryId = 1,
             ImageUrl = "/images/products/cu.jpg"
         };
         _productRepository

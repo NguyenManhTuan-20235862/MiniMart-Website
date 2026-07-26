@@ -26,10 +26,37 @@ public interface IProductRepository
     Task<Product?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Nhiều sản phẩm trong MỘT truy vấn. Dùng cho giỏ hàng: gọi
+    /// <see cref="GetByIdAsync"/> cho từng dòng là 12 round-trip cho giỏ 12 món
+    /// (bài toán N+1). Trả về ít phần tử hơn số id truyền vào nếu có sản phẩm
+    /// đã bị xoá - người gọi phải xử lý trường hợp đó.
+    /// </summary>
+    Task<List<Product>> GetByIdsAsync(
+        IEnumerable<int> ids,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Bản CÓ theo dõi thay đổi, dùng cho luồng sửa. Phải tách khỏi GetByIdAsync
     /// vì entity AsNoTracking sửa xong gọi SaveChanges sẽ không lưu được gì.
     /// </summary>
     Task<Product?> GetForUpdateAsync(int id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Khai báo phiên bản mà người dùng ĐÃ THẤY lúc mở form, để lần lưu tới so
+    /// với phiên bản đó thay vì phiên bản vừa đọc lên.
+    ///
+    /// <para>
+    /// Không có bước này thì Optimistic Concurrency chỉ bảo vệ được khoảng vài
+    /// millisecond giữa <see cref="GetForUpdateAsync"/> và lúc lưu - còn khoảng
+    /// thật sự cần bảo vệ là vài phút người dùng ngồi điền form thì bỏ trống.
+    /// </para>
+    /// <para>
+    /// Nằm ở Repository vì việc này cần API của tầng lưu trữ (ghi vào
+    /// <c>OriginalValue</c> của Change Tracker), thứ mà Application không được
+    /// biết đến. Domain chỉ khai báo NHU CẦU "ghim phiên bản mong đợi".
+    /// </para>
+    /// </summary>
+    void SetExpectedRowVersion(Product product, byte[] rowVersion);
 
     Task AddAsync(Product product, CancellationToken cancellationToken = default);
 

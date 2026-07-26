@@ -18,7 +18,6 @@ public class ProductQueryTests : IAsyncLifetime
     private readonly List<int> _categoryIds = [];
 
     private int _categoryA;
-    private int _categoryB;
 
     private IServiceScope CreateScope() => _factory.Services.CreateScope();
 
@@ -48,7 +47,6 @@ public class ProductQueryTests : IAsyncLifetime
         await context.SaveChangesAsync();
 
         _categoryA = a.Id;
-        _categoryB = b.Id;
         _categoryIds.AddRange([a.Id, b.Id]);
     }
 

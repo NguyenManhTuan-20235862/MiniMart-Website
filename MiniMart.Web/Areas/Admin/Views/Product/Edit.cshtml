@@ -13,6 +13,18 @@
            ảnh hiện tại là gì để dọn file cũ sau khi thay ảnh. *@
         <input type="hidden" asp-for="ExistingImageUrl" />
 
+        @*
+            Phiên bản bản ghi lúc form được MỞ, gửi lại để server phát hiện xung
+            đột. Đây là mảnh ghép biến Optimistic Concurrency từ "bảo vệ vài
+            millisecond trong Service" thành "bảo vệ suốt thời gian form mở".
+
+            Render Base64 THỦ CÔNG chứ không dùng asp-for: InputTagHelper gọi
+            ToString() trên byte[] và cho ra chuỗi "System.Byte[]", model binder
+            phía sau không giải mã được - lỗi im lặng, form vẫn submit bình thường.
+        *@
+        <input type="hidden" name="RowVersion"
+               value="@(Model.RowVersion is null ? null : Convert.ToBase64String(Model.RowVersion))" />
+
         <div class="mb-3">
             <label asp-for="Name" class="form-label"></label>
             <input asp-for="Name" class="form-control" />

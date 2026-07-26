@@ -5,6 +5,7 @@ using MiniMart.Application.Interfaces;
 using MiniMart.Common.Exceptions;
 using MiniMart.Domain.Entities;
 using MiniMart.Web.Areas.Admin.Models;
+using MiniMart.Web.Extensions;
 using MiniMart.Web.Services;
 
 namespace MiniMart.Web.Areas.Admin.Controllers;
@@ -95,6 +96,8 @@ public class ProductController : Controller
             Stock = product.Stock,
             CategoryId = product.CategoryId,
             ExistingImageUrl = product.ImageUrl,
+            // Chụp lại phiên bản NGAY LÚC NÀY. Đây là mốc mà lần lưu tới sẽ so với.
+            RowVersion = product.RowVersion,
             Categories = await LayDanhSachDanhMucAsync(cancellationToken)
         });
     }
@@ -115,7 +118,8 @@ public class ProductController : Controller
         try
         {
             await _productService.UpdateAsync(
-                id, model.Name, model.Price, model.Stock, model.CategoryId, imageUrl, cancellationToken);
+                id, model.Name, model.Price, model.Stock, model.CategoryId, imageUrl,
+                model.RowVersion, cancellationToken);
 
             // Thay ảnh thành công thì dọn file cũ, tránh rác tích tụ trong wwwroot.
             if (imageUrl is not null && model.ExistingImageUrl != imageUrl)
@@ -134,6 +138,17 @@ public class ProductController : Controller
             // Không tìm thấy chính SẢN PHẨM đang sửa -> render lại form là vô
             // nghĩa, phải trả 404.
             return NotFound();
+        }
+        catch (ConcurrencyConflictException)
+        {
+            // Người khác đã sửa (hoặc xoá) bản ghi này trong lúc form đang mở.
+            //
+            // KHÔNG tự quyết định ghi đè: mỗi bên có thể đã sửa những trường khác
+            // nhau, ghi đè âm thầm là làm mất công của người kia (lost update) -
+            // đúng thứ RowVersion sinh ra để chặn. Cũng KHÔNG huỷ luôn dữ liệu
+            // người dùng vừa nhập. Việc đúng là: cho họ thấy giá trị hiện tại,
+            // giữ nguyên những gì họ đã điền, rồi để họ chọn.
+            return await RenderLaiFormXungDotAsync(id, model, cancellationToken);
         }
 
         TempData["Success"] = $"Đã cập nhật sản phẩm '{model.Name}'.";
@@ -175,6 +190,48 @@ public class ProductController : Controller
 
         TempData["Success"] = "Đã xoá sản phẩm.";
         return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>
+    /// Render lại form Edit sau xung đột: nêu rõ giá trị hiện tại trong DB và nạp
+    /// RowVersion MỚI để lần bấm Lưu tiếp theo có thể thành công.
+    /// </summary>
+    private async Task<IActionResult> RenderLaiFormXungDotAsync(
+        int id,
+        ProductFormViewModel model,
+        CancellationToken cancellationToken)
+    {
+        var hienTai = await _productService.GetByIdAsync(id, cancellationToken);
+
+        if (hienTai is null)
+        {
+            // DbUpdateConcurrencyException cũng nổ khi bản ghi đã bị XOÁ (WHERE
+            // khớp 0 dòng vì không còn dòng nào), không chỉ khi RowVersion lệch.
+            ModelState.AddModelError(string.Empty,
+                "Sản phẩm này đã bị người khác xoá. Không thể lưu thay đổi.");
+
+            model.RowVersion = null;
+        }
+        else
+        {
+            ModelState.AddModelError(string.Empty,
+                $"Người khác đã sửa sản phẩm này trong lúc bạn đang mở form. " +
+                $"Giá trị hiện tại trong hệ thống: tên '{hienTai.Name}', " +
+                $"giá {hienTai.Price.ToMoneyText()} đ, tồn kho {hienTai.Stock}. " +
+                $"Kiểm tra lại rồi bấm Lưu để ghi đè, hoặc bấm Huỷ để giữ bản của họ.");
+
+            // Nạp phiên bản mới, nếu không thì lần Lưu tiếp theo lại xung đột y
+            // như cũ và người dùng mắc kẹt trong vòng lặp không có cách nào ra.
+            //
+            // Ghi vào model được vì hidden field render value THỦ CÔNG. Nếu dùng
+            // asp-for thì giá trị POST lên trong ModelState sẽ THẮNG giá trị trong
+            // model, và dòng này im lặng không có tác dụng.
+            model.RowVersion = hienTai.RowVersion;
+        }
+
+        model.Categories = await LayDanhSachDanhMucAsync(cancellationToken);
+
+        return View(model);
     }
 
     /// <summary>Trả về null khi người dùng không chọn file — Service hiểu là giữ ảnh cũ.</summary>

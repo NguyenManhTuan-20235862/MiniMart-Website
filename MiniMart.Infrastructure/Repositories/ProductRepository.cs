@@ -105,12 +105,49 @@ public class ProductRepository : IProductRepository
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
     }
 
+    public async Task<List<Product>> GetByIdsAsync(
+        IEnumerable<int> ids,
+        CancellationToken cancellationToken = default)
+    {
+        // Vật chất hoá thành mảng trước: `ids` có thể là một IEnumerable lười
+        // (VD kết quả của Select), mà EF Core cần đếm được để dựng câu IN (...).
+        var danhSach = ids as int[] ?? ids.ToArray();
+
+        if (danhSach.Length == 0)
+        {
+            // Tránh gửi "WHERE Id IN ()" xuống DB - vừa vô nghĩa vừa tốn round-trip.
+            return [];
+        }
+
+        return await _context.Products
+            .Include(p => p.Category)
+            .AsNoTracking()
+            // Contains được EF Core dịch thành `WHERE [p].[Id] IN (@p0, @p1, ...)`.
+            .Where(p => danhSach.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<Product?> GetForUpdateAsync(int id, CancellationToken cancellationToken = default)
     {
         // CÓ tracking: Change Tracker phải giữ giá trị RowVersion gốc thì
         // SaveChanges mới kẹp được nó vào WHERE để phát hiện xung đột.
         return await _context.Products
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+    }
+
+    public void SetExpectedRowVersion(Product product, byte[] rowVersion)
+    {
+        // Ghi vào OriginalValue, KHÔNG phải CurrentValue.
+        //
+        // EF Core sinh câu UPDATE dạng:
+        //     UPDATE Products SET ... WHERE Id = @id AND RowVersion = @original
+        // Giá trị kẹp vào WHERE là OriginalValue. CurrentValue của cột rowversion
+        // do SQL Server tự sinh nên gán vào đó không có tác dụng gì.
+        //
+        // Sau GetForUpdateAsync, OriginalValue = phiên bản HIỆN TẠI trong DB nên
+        // WHERE luôn khớp. Ghi đè bằng phiên bản người dùng thấy lúc mở form thì
+        // WHERE mới trượt được khi có người khác đã sửa ở giữa.
+        _context.Entry(product).Property(p => p.RowVersion).OriginalValue = rowVersion;
     }
 
     public async Task AddAsync(Product product, CancellationToken cancellationToken = default)
