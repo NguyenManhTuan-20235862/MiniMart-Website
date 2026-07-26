@@ -42,6 +42,24 @@ public interface IProductRepository
     Task<Product?> GetForUpdateAsync(int id, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Nhiều sản phẩm CÓ theo dõi thay đổi trong MỘT truy vấn - dùng cho đặt hàng.
+    ///
+    /// <para>
+    /// Bản chùm của <see cref="GetForUpdateAsync"/>. Gọi bản lẻ cho từng dòng giỏ
+    /// hàng cũng đúng về concurrency (<c>RowVersion</c> là của từng dòng nên đọc lẻ
+    /// hay đọc chùm đều lấy đúng giá trị hiện tại), nhưng là N round-trip cho giỏ N
+    /// món.
+    /// </para>
+    /// <para>
+    /// Trả về ít phần tử hơn số id truyền vào nếu có sản phẩm đã bị xoá - người gọi
+    /// PHẢI xử lý trường hợp đó.
+    /// </para>
+    /// </summary>
+    Task<List<Product>> GetManyForUpdateAsync(
+        IEnumerable<int> ids,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Khai báo phiên bản mà người dùng ĐÃ THẤY lúc mở form, để lần lưu tới so
     /// với phiên bản đó thay vì phiên bản vừa đọc lên.
     ///

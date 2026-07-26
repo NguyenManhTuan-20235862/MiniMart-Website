@@ -10,10 +10,14 @@ public class ProductServiceTests
 {
     private readonly Mock<IProductRepository> _productRepository = new();
     private readonly Mock<ICategoryRepository> _categoryRepository = new();
+    private readonly Mock<IOrderRepository> _orderRepository = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
 
     private ProductService CreateSut() =>
-        new(_productRepository.Object, _categoryRepository.Object, _unitOfWork.Object);
+        new(_productRepository.Object,
+            _categoryRepository.Object,
+            _orderRepository.Object,
+            _unitOfWork.Object);
 
     private void GiaSuTonTaiDanhMuc(int id) =>
         _categoryRepository

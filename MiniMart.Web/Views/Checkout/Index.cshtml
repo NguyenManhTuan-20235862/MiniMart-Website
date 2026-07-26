@@ -1,0 +1,51 @@
+@model CartTableViewModel
+@{
+    ViewData["Title"] = "Xác nhận đặt hàng";
+}
+
+<h1 class="h3 mb-4">Xác nhận đặt hàng</h1>
+
+@*
+    Dùng LẠI _CartTable với ChoPhepSua = false: cùng một khuôn bảng, cùng cách in tiền,
+    cùng logic badge còn/hết hàng - chỉ ẩn phần sửa được. Tạo bảng riêng cho trang này
+    là nhân đôi ba thứ đó.
+*@
+<partial name="_CartTable" model="Model" />
+
+@if (Model.Cart.HasStockProblem)
+{
+    @*
+        Cảnh báo, KHÔNG chặn mở trang: người dùng cần đọc được vấn đề nằm ở đâu mới sửa
+        được. Việc chặn thuộc về POST đặt hàng - đó là lúc dữ liệu thật sự được ghi.
+    *@
+    <div class="alert alert-danger">
+        Có sản phẩm không còn đủ hàng. Hãy
+        <a asp-controller="Cart" asp-action="Index">quay lại giỏ hàng</a>
+        để điều chỉnh trước khi đặt.
+    </div>
+}
+
+<div class="alert alert-warning">
+    <strong>Lưu ý về giá:</strong> số tiền ở trên là giá <em>hiện tại</em> của sản phẩm.
+    Giá của đơn hàng được chốt lại vào đúng thời điểm bạn xác nhận.
+</div>
+
+<div class="d-flex justify-content-between align-items-center">
+    <a class="btn btn-outline-secondary" asp-controller="Cart" asp-action="Index">
+        Quay lại giỏ hàng
+    </a>
+
+    @*
+        POST chứ không phải thẻ <a>: đây là thao tác GHI có hệ quả thật (trừ tồn kho,
+        tạo đơn). GET thì chỉ cần nhúng một thẻ img trỏ tới URL này là đặt đơn hộ
+        người khác - antiforgery token cũng không cứu được vì GET không đi qua nó.
+
+        Form KHÔNG có trường nào: userId lấy từ cookie đã ký, giỏ hàng lấy từ DB.
+        Không có gì để người dùng giả mạo.
+    *@
+    <form asp-action="Confirm" method="post">
+        <button type="submit" class="btn btn-success">
+            Xác nhận đặt hàng
+        </button>
+    </form>
+</div>

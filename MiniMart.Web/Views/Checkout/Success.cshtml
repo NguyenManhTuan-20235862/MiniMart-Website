@@ -1,0 +1,51 @@
+@model OrderView
+@{
+    ViewData["Title"] = $"Đơn hàng #{Model.Id}";
+}
+
+<div class="alert alert-success">
+    <h1 class="h4 mb-1">Đặt hàng thành công</h1>
+    <div>Mã đơn hàng của bạn là <strong>#@Model.Id</strong>.</div>
+</div>
+
+@*
+    Mọi con số dưới đây đến từ OrderDetail đã SNAPSHOT, không join sang Products.
+    Nhờ vậy mở lại trang này tháng sau vẫn ra đúng số tiền đã trả, kể cả khi shop
+    đã đổi giá hoặc đổi tên sản phẩm.
+*@
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Sản phẩm</th>
+                <th scope="col" class="text-end">Đơn giá</th>
+                <th scope="col">Số lượng</th>
+                <th scope="col" class="text-end">Thành tiền</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var line in Model.Lines)
+            {
+                <tr>
+                    <td>@line.ProductName</td>
+                    <td class="text-end">@line.UnitPrice.ToMoneyText() đ</td>
+                    <td>@line.Quantity</td>
+                    <td class="text-end fw-bold">@line.LineTotal.ToMoneyText() đ</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3" class="text-end fw-bold">Tổng cộng</td>
+                <td class="text-end fw-bold text-danger">@Model.TotalAmount.ToMoneyText() đ</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+<p class="text-muted small">
+    Đặt lúc @Model.CreatedAt.ToString("dd/MM/yyyy HH:mm") (UTC) &middot;
+    Tổng @Model.TotalQuantity món.
+</p>
+
+<a class="btn btn-outline-primary" asp-controller="Home" asp-action="Index">Tiếp tục mua sắm</a>

@@ -135,6 +135,27 @@ public class ProductRepository : IProductRepository
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
     }
 
+    public async Task<List<Product>> GetManyForUpdateAsync(
+        IEnumerable<int> ids,
+        CancellationToken cancellationToken = default)
+    {
+        var danhSach = ids as int[] ?? ids.ToArray();
+
+        if (danhSach.Length == 0)
+        {
+            return [];
+        }
+
+        // CÓ tracking (không AsNoTracking) — khác GetByIdsAsync ở đúng điểm này.
+        // Không có tracking thì Change Tracker không giữ RowVersion gốc, phép trừ
+        // tồn kho không được lưu, và không xung đột nào bị phát hiện.
+        //
+        // Không Include(Category): đường ghi chỉ cần Name, Price, Stock, RowVersion.
+        return await _context.Products
+            .Where(p => danhSach.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+    }
+
     public void SetExpectedRowVersion(Product product, byte[] rowVersion)
     {
         // Ghi vào OriginalValue, KHÔNG phải CurrentValue.

@@ -10,6 +10,7 @@ public class ProductService : IProductService
 {
     private readonly IProductRepository _productRepository;
     private readonly ICategoryRepository _categoryRepository;
+    private readonly IOrderRepository _orderRepository;
     private readonly IUnitOfWork _unitOfWork;
 
     // Service được phép phối hợp NHIỀU repository - đó chính là lý do quy tắc
@@ -17,10 +18,12 @@ public class ProductService : IProductService
     public ProductService(
         IProductRepository productRepository,
         ICategoryRepository categoryRepository,
+        IOrderRepository orderRepository,
         IUnitOfWork unitOfWork)
     {
         _productRepository = productRepository;
         _categoryRepository = categoryRepository;
+        _orderRepository = orderRepository;
         _unitOfWork = unitOfWork;
     }
 
@@ -120,9 +123,30 @@ public class ProductService : IProductService
         var product = await _productRepository.GetForUpdateAsync(id, cancellationToken)
             ?? throw new NotFoundException(nameof(Product), id);
 
+        // Kiểm TRƯỚC để có thông báo tử tế, đúng khuôn của CategoryService: dựa vào
+        // lỗi khoá ngoại của DB thì người dùng nhận được "FK constraint violated".
+        //
+        // OrderDetails.ProductId là Restrict (đơn hàng là bản ghi tài chính), khác
+        // hẳn CartItems.ProductId là Cascade (giỏ hàng là dữ liệu tạm).
+        if (await _orderRepository.HasOrdersForProductAsync(id, cancellationToken))
+        {
+            throw new ProductHasOrdersException(id);
+        }
+
         _productRepository.Remove(product);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (ReferenceConstraintException ex)
+        {
+            // Bịt khe TOCTOU: có người vừa đặt hàng đúng sản phẩm này giữa lúc kiểm
+            // tra ở trên và lúc lưu. Restrict dưới DB là bảo đảm cuối cùng; đây chỉ
+            // là việc dịch nó thành cùng một thông báo nghiệp vụ để người dùng không
+            // gặp hai kiểu lỗi khác nhau cho cùng một nguyên nhân.
+            throw new ProductHasOrdersException(id, ex);
+        }
     }
 
     /// <summary>

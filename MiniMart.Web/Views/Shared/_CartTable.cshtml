@@ -36,7 +36,10 @@ else
                     <th scope="col" class="text-end">Đơn giá</th>
                     <th scope="col" style="width: 190px;">Số lượng</th>
                     <th scope="col" class="text-end">Thành tiền</th>
-                    <th scope="col"></th>
+                    @if (Model.ChoPhepSua)
+                    {
+                        <th scope="col"></th>
+                    }
                 </tr>
             </thead>
             <tbody>
@@ -68,33 +71,48 @@ else
                         <td class="text-end">@line.UnitPrice.ToMoneyText() đ</td>
 
                         <td>
-                            <form asp-action="UpdateQuantity" method="post" class="d-flex gap-1">
-                                <input type="hidden" name="ProductId" value="@line.ProductId" />
-                                @*
-                                    type="number": giá trị luôn được gửi ở dạng chuẩn hoá bất kể
-                                    locale trình duyệt. Với type="text", người dùng vi-VN gõ dấu
-                                    phân cách sẽ khiến model binding trả về 0 trong im lặng.
+                            @if (Model.ChoPhepSua)
+                            {
+                                @* asp-action KHÔNG ghi rõ controller: ở /Cart thì nó tự suy ra
+                                   CartController. Bảng này còn dùng ở /Checkout nên nếu để form
+                                   hiện ra ở đó, asp-action sẽ trỏ sang CheckoutController và
+                                   sinh URL không tồn tại - thêm một lý do để ẩn hẳn. *@
+                                <form asp-controller="Cart" asp-action="UpdateQuantity" method="post"
+                                      class="d-flex gap-1">
+                                    <input type="hidden" name="ProductId" value="@line.ProductId" />
+                                    @*
+                                        type="number": giá trị luôn được gửi ở dạng chuẩn hoá bất kể
+                                        locale trình duyệt. Với type="text", người dùng vi-VN gõ dấu
+                                        phân cách sẽ khiến model binding trả về 0 trong im lặng.
 
-                                    max KHÔNG đặt theo tồn kho: đó là kiểm tra phía client, mà
-                                    tồn kho có thể đã đổi. CartService kẹp lại ở server và báo về.
-                                *@
-                                <input type="number" name="Quantity" value="@line.Quantity"
-                                       min="0" max="100" class="form-control form-control-sm"
-                                       style="width: 80px;" aria-label="Số lượng @line.Name" />
-                                <button type="submit" class="btn btn-sm btn-outline-secondary">Cập nhật</button>
-                            </form>
+                                        max KHÔNG đặt theo tồn kho: đó là kiểm tra phía client, mà
+                                        tồn kho có thể đã đổi. CartService kẹp lại ở server và báo về.
+                                    *@
+                                    <input type="number" name="Quantity" value="@line.Quantity"
+                                           min="0" max="100" class="form-control form-control-sm"
+                                           style="width: 80px;" aria-label="Số lượng @line.Name" />
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Cập nhật</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span>@line.Quantity</span>
+                            }
                         </td>
 
                         <td class="text-end fw-bold">@line.LineTotal.ToMoneyText() đ</td>
 
-                        <td class="text-end">
-                            @* Xoá BẮT BUỘC là POST: nếu là GET thì chỉ cần nhúng một thẻ img
-                               trỏ tới URL này là xoá được giỏ của người khác. *@
-                            <form asp-action="Remove" method="post">
-                                <input type="hidden" name="ProductId" value="@line.ProductId" />
-                                <button type="submit" class="btn btn-sm btn-outline-danger">Xoá</button>
-                            </form>
-                        </td>
+                        @if (Model.ChoPhepSua)
+                        {
+                            <td class="text-end">
+                                @* Xoá BẮT BUỘC là POST: nếu là GET thì chỉ cần nhúng một thẻ img
+                                   trỏ tới URL này là xoá được giỏ của người khác. *@
+                                <form asp-controller="Cart" asp-action="Remove" method="post">
+                                    <input type="hidden" name="ProductId" value="@line.ProductId" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Xoá</button>
+                                </form>
+                            </td>
+                        }
                     </tr>
                 }
             </tbody>
@@ -104,7 +122,10 @@ else
                     <td class="text-end fw-bold text-danger">
                         @Model.Cart.TotalAmount.ToMoneyText() đ
                     </td>
-                    <td></td>
+                    @if (Model.ChoPhepSua)
+                    {
+                        <td></td>
+                    }
                 </tr>
             </tfoot>
         </table>
@@ -114,4 +135,21 @@ else
         Tổng <span id="cartCount">@Model.Cart.TotalQuantity</span> món.
         Giá hiển thị là giá hiện tại, chốt lại khi đặt hàng.
     </p>
+
+    @if (Model.ChoPhepSua)
+    {
+        @*
+            Nút sang trang xác nhận. Là thẻ <a> (GET) chứ không phải form POST: nó chỉ
+            ĐIỀU HƯỚNG sang trang xem lại, chưa tạo gì cả. Thao tác ghi thật nằm ở POST
+            trên trang /Checkout.
+
+            Không disable khi HasStockProblem: /Checkout vẫn phải mở được để người dùng
+            đọc được vấn đề. Việc chặn thuộc về POST đặt hàng, không phải ở đây.
+        *@
+        <div class="d-flex justify-content-end">
+            <a class="btn btn-primary" asp-controller="Checkout" asp-action="Index">
+                Tiến hành đặt hàng
+            </a>
+        </div>
+    }
 }

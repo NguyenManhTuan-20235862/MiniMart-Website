@@ -79,6 +79,40 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
   thiếu chính đối tượng đang thao tác → `NotFound()`; thiếu đối tượng được tham chiếu
   → `AddModelError` vào đúng ô nhập rồi render lại form.
 
+## Snapshot: giỏ hàng KHÔNG chốt, đơn hàng chốt TẤT CẢ
+- `CartItem` cố ý không snapshot gì — giỏ hàng phải hiện giá HIỆN TẠI.
+- `OrderDetail` snapshot cả `UnitPrice` **và** `ProductName`. Snapshot cả tên chứ không chỉ
+  giá: shop đổi tên sản phẩm thì đơn cũ phải hiện đúng cái tên khách đã thấy lúc mua.
+- `Order.TotalAmount` lưu ra cột riêng dù tính lại được: đây là con số ràng buộc với khách,
+  nó phải là dữ liệu chứ không phải kết quả một phép tính có thể đổi khi code đổi.
+- Tổng đơn tính từ giá **đã snapshot**, không đọc lại `product.Price` — hai chỗ đọc giá là
+  hai cơ hội để tổng đơn lệch khỏi tổng các dòng.
+- `LineTotal` là thuộc tính tính toán, phải `builder.Ignore(...)`. Thiếu dòng đó thì EF Core
+  coi nó là cột và migration sinh ra một cột không bao giờ được ghi.
+
+## DeleteBehavior: cùng một khoá ngoại, hai câu trả lời khác nhau
+Tiêu chí là **dữ liệu tạm hay bản ghi lịch sử**, không phải "cho nhất quán":
+
+| Khoá ngoại | Hành vi | Vì sao |
+|---|---|---|
+| `Category → Product` | Restrict | Xoá danh mục không được âm thầm xoá sạch sản phẩm |
+| `CartItem → Product` | **Cascade** | Giỏ là dữ liệu tạm; hàng ngừng bán phải tự biến khỏi mọi giỏ |
+| `CartItem → Cart` | Cascade | Dòng giỏ không tồn tại độc lập |
+| `OrderDetail → Product` | **Restrict** | Đơn hàng là bản ghi TÀI CHÍNH; Cascade là để lịch sử tự sửa lại chính nó |
+| `OrderDetail → Order` | Cascade | Dòng đơn không tồn tại độc lập |
+| `Order → User` | Restrict | Đơn phải sống lâu hơn tài khoản đặt nó |
+
+- Hệ quả cố ý: **sản phẩm đã từng được đặt thì không xoá được nữa**; tài khoản đã đặt hàng
+  cũng vậy. Việc đúng với hàng ngừng bán là đặt tồn kho về 0, không phải xoá.
+- Mọi ràng buộc Restrict phải có **thông báo tử tế** ở Service (`CategoryHasProductsException`,
+  `ProductHasOrdersException`), theo khuôn: kiểm TRƯỚC khi xoá, khoá ngoại là bảo đảm cuối.
+- `UnitOfWork` dịch mã lỗi SQL **547** thành `ReferenceConstraintException` để bịt khe
+  TOCTOU (có người vừa đặt hàng giữa lúc kiểm và lúc lưu). Không có bước dịch này thì
+  trường hợp hiếm đó cho ra HTTP 500 kèm thông báo của EF Core.
+- Đã mutation test: **bỏ lệnh kiểm ở Service thì không test nào đỏ** — vì nhánh dịch 547 tạo
+  ra ĐÚNG cùng một exception. Đó là tính chất tốt, không phải lỗ hổng test: lệnh kiểm là
+  đường đẹp, khoá ngoại mới là thứ bảo đảm.
+
 ## Đăng ký DI
 - Không viết `AddScoped` rời rạc trong `Program.cs`. Dùng extension method
   `AddApplication()` (Application) và `AddInfrastructure(configuration)` (Infrastructure).

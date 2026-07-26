@@ -183,6 +183,17 @@ public class ProductController : Controller
         {
             return NotFound();
         }
+        catch (ProductHasOrdersException ex)
+        {
+            // Hệ quả cố ý của OrderDetails.ProductId = Restrict. Không phải lỗi hệ
+            // thống mà là quy tắc nghiệp vụ, nên trả về danh sách kèm lời giải thích
+            // và HƯỚNG XỬ LÝ (đặt tồn kho về 0), không phải trang lỗi.
+            //
+            // Return sớm ở đây còn giữ được file ảnh: xoá ảnh của một sản phẩm vẫn
+            // còn trong DB là làm hỏng mọi đơn hàng cũ đang hiển thị nó.
+            TempData["Error"] = ex.Message;
+            return RedirectToAction(nameof(Index));
+        }
 
         // Chỉ xoá file khi DB đã xoá xong. Làm ngược lại mà DB lỗi thì bản ghi
         // còn nguyên nhưng ảnh đã mất.

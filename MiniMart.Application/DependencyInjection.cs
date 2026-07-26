@@ -20,6 +20,7 @@ public static class DependencyInjection
         // Phụ thuộc ICartStore - do factory ở Program.cs quyết định là kho Session
         // hay kho DB. CartService không biết và không cần biết.
         services.AddScoped<ICartService, CartService>();
+        services.AddScoped<IOrderService, OrderService>();
 
         // Singleton hợp lệ ở đây: PasswordHasher không giữ state và không phụ
         // thuộc DbContext. Nếu nó phụ thuộc thứ gì Scoped thì Singleton sẽ tạo

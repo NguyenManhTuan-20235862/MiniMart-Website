@@ -14,6 +14,16 @@ public class UnitOfWork : IUnitOfWork
         _context = context;
     }
 
+    public async Task<ITransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        // Cùng DbContext nên mọi SaveChangesAsync sau đây tự chạy trong transaction
+        // này - không phải truyền transaction đi đâu cả. Đó là lý do API transaction
+        // thuộc về IUnitOfWork chứ không phải từng Repository.
+        var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+        return new EfTransaction(transaction);
+    }
+
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         try
@@ -37,15 +47,29 @@ public class UnitOfWork : IUnitOfWork
 
             throw new ConcurrencyConflictException(entityName, id, ex);
         }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        catch (DbUpdateException ex) when (LaLoiSql(ex, 2601, 2627))
         {
             // Nơi duy nhất trong hệ thống được biết EF Core và mã lỗi SQL Server.
             // Tầng trên chỉ thấy DuplicateKeyException.
             throw new DuplicateKeyException(ex);
         }
+        catch (DbUpdateException ex) when (LaLoiSql(ex, 547))
+        {
+            // 547 = vi phạm ràng buộc khoá ngoại HOẶC check constraint.
+            //
+            // Ở dự án này nó gần như luôn là khoá ngoại Restrict (xoá Category còn
+            // Product, xoá Product đã có OrderDetail) vì mọi check constraint đều đã
+            // được Service kiểm trước. Không tách riêng hai nguyên nhân: thông điệp
+            // cho tầng trên là "thao tác này bị dữ liệu khác chặn", và Application
+            // mới là nơi biết dữ liệu khác đó là gì.
+            throw new ReferenceConstraintException(ex);
+        }
     }
 
-    // 2601 = trùng khoá trên unique index, 2627 = vi phạm unique constraint.
-    private static bool IsUniqueViolation(DbUpdateException ex) =>
-        ex.InnerException is SqlException sqlEx && sqlEx.Number is 2601 or 2627;
+    /// <summary>
+    /// 2601 = trùng khoá trên unique index, 2627 = vi phạm unique constraint,
+    /// 547 = vi phạm khoá ngoại / check constraint.
+    /// </summary>
+    private static bool LaLoiSql(DbUpdateException ex, params int[] maLoi) =>
+        ex.InnerException is SqlException sqlEx && maLoi.Contains(sqlEx.Number);
 }

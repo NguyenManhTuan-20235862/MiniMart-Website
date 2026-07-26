@@ -70,6 +70,11 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 | Đổi tên một `data-*` mà JS đang `querySelector` | `null` → JS ngừng chạy, không lỗi nào |
 | Bọc node JS cần cập nhật trong `@if` | Lần đầu cần cập nhật thì không có node |
 | Xét nhánh PartialView trước nhánh JSON | Client nhận HTML, `response.json()` ném |
+| `Stock -= n` mà cột không phải concurrency token | **Oversell** — đã đo: bán 10 khi có 5 |
+| Chạm nhiều dòng không theo thứ tự cố định | Deadlock, chỉ xuất hiện dưới tải |
+| Nhận `userId` từ form thay vì `ICurrentUser` | IDOR: đặt đơn / đọc đơn dưới tên người khác |
+| Quên `builder.Ignore()` cho property tính toán | Migration sinh cột không bao giờ được ghi |
+| Đọc lại `product.Price` khi tính tổng đơn | Tổng đơn lệch khỏi tổng các dòng |
 
 ## Môi trường
 - .NET SDK 10, SQL Server 2025 Express, instance `SQLEXPRESS`.
@@ -96,10 +101,6 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 ## Nợ kỹ thuật đã biết (cố ý chưa làm, đừng "sửa" nửa vời)
 
 ### Hoãn có chủ đích — KHÔNG làm cho tới khi điều kiện đủ
-- `IUnitOfWork` **chưa có API transaction**, và sẽ chưa có cho tới khi làm nghiệp vụ đặt
-  hàng. Thiết kế API transaction mà chưa có nghiệp vụ nào dùng nó là đoán: không biết
-  transaction bọc bao nhiêu thao tác, có cần lồng nhau không, isolation level nào. Sai
-  thiết kế ở đây tốn hơn là chờ.
 - **Trang chi tiết sản phẩm chưa làm**, nên `/Product` trả 404 (chỉ có action `LoadMore`).
   Đây là **tính năng chưa làm**, không phải nợ kỹ thuật — không có gì hỏng, chỉ là chưa có.
 - `Cart`/`CartItem` **chưa có `RowVersion`**, và chưa cần: giỏ hàng là dữ liệu của MỘT
@@ -135,6 +136,20 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
   "Vui lòng thử lại", chưa **thử lại thật**. Thử lại sạch sẽ đòi một `DbContext` mới nên
   không làm được trong cùng request. Cửa sổ race rất hẹp (chỉ request đầu tiên của một tài
   khoản mới) nên chưa đáng đổi lấy độ phức tạp.
+- **Đặt hàng chưa có retry khi xung đột.** Optimistic Concurrency chống oversell tuyệt đối,
+  nhưng 10 người bấm cùng lúc khi còn 5 hàng thì chỉ **1** đơn thành công — 9 người còn lại
+  nhận "vui lòng cập nhật giỏ hàng" dù kho vẫn còn 4. Đã đo bằng test. Cần retry (hoặc đổi
+  sang Pessimistic `UPDLOCK`) khi có flash sale; chưa đáng làm bây giờ. Xem
+  `.claude/rules/concurrency.md`.
+- **Transaction tường minh trong `CheckoutAsync` hiện chưa chịu lực.** Mọi thao tác ghi đi
+  qua MỘT `SaveChangesAsync`, mà EF Core đã tự bọc mỗi `SaveChanges` trong transaction ngầm —
+  mutation test xác nhận bỏ nó đi thì cả 5 integration test vẫn xanh. Giữ lại vì nó đúng
+  ngay khi có `SaveChanges` thứ hai (bản ghi thanh toán), nhưng **đừng tưởng nó đang bảo vệ
+  atomicity hôm nay**.
+- **Chưa có trang "Đơn hàng của tôi".** Đã có `IOrderService.GetMyOrderAsync` cho một đơn,
+  chưa có danh sách. Index `(UserId, CreatedAt DESC)` trên `Orders` đã dựng sẵn cho việc đó.
+- **`Order` chưa có `Status`** — cố ý. Thêm cột trạng thái trước khi biết đơn có những trạng
+  thái nào là đoán, cùng lý do đã hoãn API transaction cho tới đúng lúc cần.
 
 ### Đã trả (giữ lại để không ai "sửa" ngược)
 - ~~Round-trip RowVersion~~ → đã làm, xem `.claude/rules/concurrency.md`.
@@ -147,6 +162,11 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
   `.claude/rules/cart.md`. Đừng "đơn giản hoá" bằng cách bắt đăng nhập mới mua được.
 - ~~Chống IDOR trên giỏ hàng~~ → đã làm bằng cấu trúc (`productId`, không `cartItemId`), có
   7 test và 3 mutation. Đừng thêm `cartItemId` vào request model "cho tiện".
+- ~~`IUnitOfWork` chưa có API transaction~~ → đã thêm **đúng lúc** làm nghiệp vụ đặt hàng,
+  như điều kiện đã đặt ra từ đầu. `ITransaction` ở Domain bọc `IDbContextTransaction`.
+- ~~Trừ tồn kho chống oversell~~ → đã làm bằng Optimistic trên `Products.RowVersion`, có
+  test song song trên SQL Server thật. Đừng đổi `IsRowVersion()` — mutation đã chứng minh
+  bỏ nó đi là bán 10 món khi chỉ có 5.
 
 ## Cách làm việc với tôi (người học)
 - Tôi đang học song song, nên MỌI đoạn code Claude Code viết ra đều phải kèm:
