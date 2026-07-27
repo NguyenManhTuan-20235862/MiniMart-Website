@@ -53,7 +53,7 @@ public class CheckoutConfirmTests : IAsyncLifetime
         // CookieContainer RIÊNG, nên không chép được phiên sang client thứ hai.
         var (client, _) = await TaoNguoiMuaAsync(_productId, 2, theoRedirect: false);
 
-        var response = await client.PostFormAsync("/Checkout/Confirm", new());
+        var response = await client.PostFormAsync("/Checkout/Confirm", CheckoutTestData.Form());
 
         // PRG bắt buộc: không redirect thì bấm F5 sau khi đặt hàng sẽ hỏi gửi lại
         // form, và lần này gửi lại nghĩa là đặt THÊM một đơn nữa.
@@ -70,7 +70,7 @@ public class CheckoutConfirmTests : IAsyncLifetime
     {
         var (client, _) = await TaoNguoiMuaAsync(_productId, 2);
 
-        var html = await (await client.PostFormAsync("/Checkout/Confirm", new()))
+        var html = await (await client.PostFormAsync("/Checkout/Confirm", CheckoutTestData.Form()))
             .Content.ReadAsStringAsync();
 
         Assert.Contains("Đặt hàng thành công", html);
@@ -84,7 +84,7 @@ public class CheckoutConfirmTests : IAsyncLifetime
     {
         var (client, username) = await TaoNguoiMuaAsync(_productId, 3);
 
-        await client.PostFormAsync("/Checkout/Confirm", new());
+        await client.PostFormAsync("/Checkout/Confirm", CheckoutTestData.Form());
 
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<MiniMartDbContext>();
@@ -99,7 +99,7 @@ public class CheckoutConfirmTests : IAsyncLifetime
     {
         var (client, username) = await TaoNguoiMuaAsync(_productId, 1);
 
-        await client.PostFormAsync("/Checkout/Confirm", new());
+        await client.PostFormAsync("/Checkout/Confirm", CheckoutTestData.Form());
 
         using (var scope = _factory.Services.CreateScope())
         {
@@ -123,7 +123,7 @@ public class CheckoutConfirmTests : IAsyncLifetime
     public async Task Khong_xem_duoc_don_hang_cua_NGUOI_KHAC()
     {
         var (clientA, usernameA) = await TaoNguoiMuaAsync(_productId, 1);
-        await clientA.PostFormAsync("/Checkout/Confirm", new());
+        await clientA.PostFormAsync("/Checkout/Confirm", CheckoutTestData.Form());
 
         var orderIdCuaA = await LayOrderIdAsync(usernameA);
 
@@ -145,11 +145,15 @@ public class CheckoutConfirmTests : IAsyncLifetime
         var userIdCuaA = await LayUserIdAsync(usernameA);
 
         // Cố ép đơn hàng sang tên người khác qua form.
-        await clientB.PostFormAsync("/Checkout/Confirm", new()
-        {
-            ["userId"] = userIdCuaA.ToString(),
-            ["UserId"] = userIdCuaA.ToString()
-        });
+        //
+        // Form giờ CÓ trường hợp lệ (địa chỉ giao hàng), nên đây là bài kiểm tra sắc
+        // hơn trước: không còn là "action bỏ qua mọi thứ từ request" mà là "action
+        // nhận dữ liệu giao hàng NHƯNG vẫn không nhận danh tính".
+        var form = CheckoutTestData.Form();
+        form["userId"] = userIdCuaA.ToString();
+        form["UserId"] = userIdCuaA.ToString();
+
+        await clientB.PostFormAsync("/Checkout/Confirm", form);
 
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<MiniMartDbContext>();
@@ -165,7 +169,7 @@ public class CheckoutConfirmTests : IAsyncLifetime
     {
         using var client = TaoClient(theoRedirect: false);
 
-        var response = await client.PostFormAsync("/Checkout/Confirm", new());
+        var response = await client.PostFormAsync("/Checkout/Confirm", CheckoutTestData.Form());
 
         // [Authorize] ở cấp class nên action thêm sau tự động được bảo vệ.
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
@@ -194,7 +198,7 @@ public class CheckoutConfirmTests : IAsyncLifetime
     // ───────────── Đường lỗi ─────────────
 
     [Fact]
-    public async Task Khong_du_hang_thi_ve_gio_hang_kem_thong_bao_ro_rang()
+    public async Task Khong_du_hang_thi_hien_lai_form_kem_thong_bao_ro_rang()
     {
         var (client, username) = await TaoNguoiMuaAsync(_productItHang, 3);
 
@@ -207,13 +211,24 @@ public class CheckoutConfirmTests : IAsyncLifetime
                 .ExecuteUpdateAsync(s => s.SetProperty(p => p.Stock, 1));
         }
 
-        var html = await (await client.PostFormAsync("/Checkout/Confirm", new()))
+        var diaChiRieng = "So 7 Ngo Quyen, Hoan Kiem, Ha Noi";
+
+        var html = await (await client.PostFormAsync(
+                "/Checkout/Confirm", CheckoutTestData.Form(diaChi: diaChiRieng)))
             .Content.ReadAsStringAsync();
 
-        // Đẩy về /Cart chứ không render lại /Checkout: người dùng cần SỬA giỏ, mà
-        // trang Checkout cố ý không sửa được.
+        // ĐỔI SO VỚI TRƯỚC: render lại trang xác nhận thay vì đẩy về /Cart. Lý do đổi
+        // là từ khi có form địa chỉ, redirect vứt sạch dữ liệu người dùng vừa gõ.
         Assert.Contains("ItHang", html);
         Assert.Contains("chỉ còn 1", html);
+
+        // ★ Assertion quan trọng nhất của test này: địa chỉ vừa gõ PHẢI còn nguyên
+        // trong ô nhập. Không có nó thì test vẫn xanh với một trang lỗi trống trơn,
+        // tức là đúng cái hành vi mà lần đổi này muốn loại bỏ.
+        Assert.Contains(diaChiRieng, html);
+
+        // Vẫn ở lại trang xác nhận, không phải trang giỏ hàng.
+        Assert.Contains("action=\"/Checkout/Confirm\"", html);
 
         // Và tuyệt đối không được tạo đơn.
         using var scope2 = _factory.Services.CreateScope();
@@ -232,7 +247,7 @@ public class CheckoutConfirmTests : IAsyncLifetime
             ["ProductId"] = _productId.ToString()
         });
 
-        var html = await (await client.PostFormAsync("/Checkout/Confirm", new()))
+        var html = await (await client.PostFormAsync("/Checkout/Confirm", CheckoutTestData.Form()))
             .Content.ReadAsStringAsync();
 
         Assert.Contains("Giỏ hàng đang trống", html);
@@ -260,8 +275,11 @@ public class CheckoutConfirmTests : IAsyncLifetime
 
     // ───────────── Nút trên trang Checkout ─────────────
 
-    [Fact]
-    public async Task Trang_Checkout_co_form_POST_toi_Confirm_va_nut_KHONG_con_disabled()
+    [Theory]
+    [InlineData("Thanh toán qua VNPay", "VnPay")]
+    [InlineData("Đặt hàng, thanh toán khi nhận", "Cod")]
+    public async Task Trang_Checkout_co_ca_hai_nut_submit_gui_dung_PhuongThuc(
+        string nhan, string giaTri)
     {
         var (client, _) = await TaoNguoiMuaAsync(_productId, 1);
 
@@ -269,12 +287,19 @@ public class CheckoutConfirmTests : IAsyncLifetime
 
         Assert.Contains("action=\"/Checkout/Confirm\"", html);
 
-        var nut = Regex.Match(html, "<button[^>]*>\\s*Xác nhận đặt hàng\\s*</button>").Value;
+        // Tìm thẻ TRƯỚC rồi bóc thuộc tính SAU - regex không được phụ thuộc thứ tự
+        // thuộc tính, đúng bài học đã ghi ở rules/testing.md.
+        var nut = Regex.Match(html, $"<button[^>]*>\\s*{Regex.Escape(nhan)}\\s*</button>").Value;
 
-        // Ở bước trước nút này cố ý disabled vì action chưa tồn tại. Giờ action đã
-        // có nên nút phải bấm được - test cũ đã được sửa cùng lúc với thay đổi này.
+        Assert.False(string.IsNullOrEmpty(nut), $"Không tìm thấy nút '{nhan}' trong HTML.");
         Assert.DoesNotContain("disabled", nut);
         Assert.Contains("type=\"submit\"", nut);
+
+        // name+value là thứ duy nhất phân biệt hai nút. Đổi tên trường ở Razor mà quên
+        // đổi property trên ViewModel thì binder cho ra Cod cho CẢ HAI nút - nút VNPay
+        // im lặng thành nút đặt hàng thường, không lỗi nào báo.
+        Assert.Contains("name=\"PhuongThuc\"", nut);
+        Assert.Contains($"value=\"{giaTri}\"", nut);
     }
 
     // ───────────── Helper ─────────────

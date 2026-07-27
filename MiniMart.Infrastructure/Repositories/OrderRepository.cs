@@ -21,6 +21,19 @@ public class OrderRepository : IOrderRepository
         await _context.Orders.AddAsync(order, cancellationToken);
     }
 
+    public async Task<Order?> GetForUpdateAsync(
+        int orderId,
+        CancellationToken cancellationToken = default)
+    {
+        // CÓ tracking (không AsNoTracking): đường ghi. Entity đọc bằng AsNoTracking
+        // sửa xong gọi SaveChanges sẽ không lưu gì và không có lỗi nào báo.
+        //
+        // Không Include(Items): người gọi duy nhất là IPN, nó chỉ đọc TotalAmount và
+        // ghi Status. Nạp thừa các dòng đơn là một lần JOIN không ai dùng tới.
+        return await _context.Orders
+            .FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+    }
+
     public async Task<Order?> GetByIdForUserAsync(
         int orderId,
         int userId,

@@ -36,6 +36,18 @@ jobs:
         Password=${{ secrets.CI_SQL_PASSWORD || 'Ci_MiniMart_2026!' }};
         TrustServerCertificate=True
 
+      # Cấu hình VNPay. BẮT BUỘC có vì VnPayOptions dùng ValidateOnStart: thiếu là
+      # ứng dụng từ chối khởi động, và MỌI integration test đỏ ngay ở dòng đầu.
+      #
+      # User Secrets không cứu được ở đây - nó chỉ được nạp khi environment là
+      # Development và nó nằm trong hồ sơ người dùng, không có trên runner của CI.
+      #
+      # Giá trị giả là ĐỦ và ĐÚNG cho CI: chưa có test nào gọi sang VNPay thật.
+      # Khi có test ký/kiểm chữ ký thì dùng `secrets.VNPAY_HASH_SECRET`, TUYỆT ĐỐI
+      # không đưa khoá sandbox thật vào file này - file này nằm trong Git.
+      VnPay__TmnCode: CI_TMNCODE
+      VnPay__HashSecret: ${{ secrets.VNPAY_HASH_SECRET || 'CI_HASHSECRET_GIA' }}
+
     steps:
       - uses: actions/checkout@v4
 

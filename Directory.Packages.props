@@ -27,6 +27,24 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.10" />
+    <!--
+      Cần cho OptionsBuilder.Bind(IConfigurationSection) ở Infrastructure. Web có sẵn
+      API này qua shared framework của ASP.NET Core, còn Infrastructure là classlib
+      thường nên phải khai báo tường minh.
+    -->
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
+
+    <!--
+      ASP.NET Core KHÔNG có provider ghi file. Bộ dựng sẵn chỉ gồm Console, Debug,
+      EventSource và EventLog (chỉ Windows) - không có File. Ghi log ra đĩa bắt buộc
+      phải dùng thư viện ngoài, đây không phải lựa chọn "cho tiện".
+
+      Serilog.AspNetCore là gói gộp: kéo theo Serilog, Sinks.Console, Sinks.File và
+      Settings.Configuration (đọc cấu hình từ appsettings.json). Khai một dòng ở đây
+      thay vì bốn dòng rời để không có chuyện nâng lệch phiên bản giữa chúng - đúng
+      lý do CPM tồn tại.
+    -->
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup Label="Test">

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -17,7 +18,29 @@ public class CookieAuthenticationTests
 {
     private static WebApplicationFactory<Program> CreateFactory(string environment) =>
         new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder => builder.UseEnvironment(environment));
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(environment);
+
+                // ★ Bắt buộc từ khi VnPayOptions có ValidateOnStart.
+                //
+                // User Secrets CHỈ được nạp ở environment Development. Test này cố ý
+                // boot ở "Production" nên khoá VNPay biến mất và ứng dụng từ chối khởi
+                // động - đúng như thiết kế, và cũng đúng như chuyện sẽ xảy ra trên máy
+                // chủ thật nếu quên đặt biến môi trường.
+                //
+                // Cấp cấu hình ngay tại đây thay vì sửa file, cùng cách LoginRateLimitTests
+                // tự hạ hạn mức: test tự lo môi trường của mình, không ai phải nhớ giữ
+                // một giá trị trong appsettings.json chỉ để test không đỏ.
+                builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["VnPay:TmnCode"] = "TEST_TMNCODE",
+                        ["VnPay:HashSecret"] = "TEST_HASHSECRET",
+                        ["VnPay:BaseUrl"] = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
+                        ["VnPay:ReturnUrl"] = "http://localhost/Payment/Return"
+                    }));
+            });
 
     private static CookieAuthenticationOptions GetCookieOptions(string environment)
     {

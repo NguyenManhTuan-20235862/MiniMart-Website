@@ -31,6 +31,32 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.CreatedAt)
             .IsRequired();
 
+        // Enum lưu thành CHUỖI - cùng lý do với Payment.Status, xem PaymentConfiguration.
+        builder.Property(o => o.Status)
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        // Ba cột giao hàng: IsRequired + HasMaxLength khớp ĐÚNG với Data Annotation
+        // trên CheckoutViewModel. Đây là quy tắc "validate ở Service/ViewModel để có
+        // thông báo tử tế, ràng buộc ở DB để có sự thật" - lệch số giữa hai nơi thì
+        // request hợp lệ ở tầng Web lại nổ khi lưu.
+        //
+        // Không có HasMaxLength thì EF Core sinh nvarchar(max): SQL Server không đánh
+        // index được trên cột đó và mỗi dòng tốn thêm chi phí lưu trữ ngoài trang dữ
+        // liệu, đổi lấy một sự "phòng xa" mà không ai cần.
+        builder.Property(o => o.RecipientName)
+            .IsRequired()
+            .HasMaxLength(100);
+
+        builder.Property(o => o.RecipientPhone)
+            .IsRequired()
+            .HasMaxLength(20);
+
+        builder.Property(o => o.ShippingAddress)
+            .IsRequired()
+            .HasMaxLength(300);
+
         // Danh sách đơn của một người, sắp theo thời gian - truy vấn chắc chắn sẽ có
         // ở trang "Đơn hàng của tôi". CreatedAt giảm dần nằm ngay trong index nên
         // không phải sort lại.

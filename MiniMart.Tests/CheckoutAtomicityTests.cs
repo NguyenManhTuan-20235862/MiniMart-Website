@@ -198,7 +198,7 @@ public class CheckoutAtomicityTests : IAsyncLifetime
 
         return await scope.ServiceProvider
             .GetRequiredService<IOrderService>()
-            .CheckoutAsync(userId);
+            .CheckoutAsync(userId, CheckoutTestData.GiaoHang);
     }
 
     private static void GanNguoiDung(IServiceScope scope, int userId)

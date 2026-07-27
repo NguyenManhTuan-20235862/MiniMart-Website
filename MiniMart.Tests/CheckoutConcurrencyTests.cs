@@ -305,7 +305,7 @@ public class CheckoutConcurrencyTests : IAsyncLifetime
 
         try
         {
-            var ketQua = await orderService.CheckoutAsync(userId);
+            var ketQua = await orderService.CheckoutAsync(userId, CheckoutTestData.GiaoHang);
 
             return new KetQuaDatHang(userId, true, ketQua.OrderId, null);
         }

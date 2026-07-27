@@ -8,9 +8,54 @@ using MiniMart.Domain.Interfaces;
 using MiniMart.Infrastructure;
 using MiniMart.Infrastructure.Repositories;
 using MiniMart.Web;
+using MiniMart.Web.Middleware;
 using MiniMart.Web.Services;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ─────────────────────────── Logging ───────────────────────────
+//
+// ClearProviders() TRƯỚC: CreateBuilder đã tự thêm Console/Debug/EventSource. Không xoá
+// thì mỗi dòng log hiện HAI lần trên console - một lần của provider mặc định, một lần
+// của sink Console của Serilog.
+builder.Logging.ClearProviders();
+
+// ★ writeToProviders: true là BẮT BUỘC, và đây là thứ tôi đã đoán sai một lần.
+//
+// `AddSerilog` trên IServiceCollection KHÔNG chỉ thêm một provider - nó đăng ký luôn
+// `SerilogLoggerFactory` làm `ILoggerFactory`, và factory đó MẶC ĐỊNH bỏ qua mọi
+// `ILoggerProvider` khác. Tưởng "AddSerilog thì cộng thêm, UseSerilog mới thay thế" là
+// sai: cả hai đều thay factory, chỉ khác chỗ đặt.
+//
+// Hệ quả đo được ở dự án này: ProductBulkUpdateSqlTests gắn một ILoggerProvider riêng để
+// bắt câu lệnh SQL và chứng minh bulk update không bị N+1. Thiếu cờ này thì provider đó
+// KHÔNG nhận được gì, test đếm 0 lệnh thay vì 2, và thông báo lỗi ("Expected 2, Actual 0")
+// không hề gợi ý gì về logging.
+builder.Services.AddSerilog(
+    writeToProviders: true,
+
+    // ★ preserveStaticLogger: true - KHÔNG đụng vào `Serilog.Log.Logger` tĩnh.
+    //
+    // Mặc định (false) là mỗi host gán logger của mình vào một biến static TOÀN CỤC và
+    // dispose logger trước đó. Với ứng dụng thật chỉ có một host nên vô hại; trong bộ
+    // test thì hàng chục WebApplicationFactory chạy SONG SONG, mỗi cái đè lên cái trước
+    // và dispose logger mà host khác đang dùng.
+    //
+    // Đã đo: ProductBulkUpdateSqlTests XANH khi chạy riêng, ĐỎ khi chạy cả bộ (đếm 0
+    // lệnh SQL) - đúng hình dạng của một test flaky do hạ tầng, mà nguyên nhân thật là
+    // một biến static.
+    //
+    // Không mất gì: dự án không dùng API tĩnh `Log.Information(...)` ở đâu cả, mọi chỗ
+    // đều tiêm `ILogger<T>` qua DI.
+    preserveStaticLogger: true,
+    configureLogger: (services, loggerConfiguration) => loggerConfiguration
+    // Toàn bộ mức log, sink và định dạng đọc từ section "Serilog" của appsettings -
+    // KHÔNG hardcode ở đây. Đổi mức log trên máy chủ không nên phải build lại.
+    .ReadFrom.Configuration(builder.Configuration)
+
+        // Cho phép sink/enricher lấy dependency từ DI khi cần.
+        .ReadFrom.Services(services));
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
@@ -167,10 +212,23 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// ─────────────────────── Pipeline HTTP ───────────────────────
+//
+// ★ PHẢI LÀ MIDDLEWARE ĐẦU TIÊN. Pipeline là các lớp lồng nhau: đăng ký sớm nghĩa là
+// nằm NGOÀI, mà một khối try/catch chỉ bắt được thứ ném ra từ BÊN TRONG nó. Dời dòng
+// này xuống dưới UseAuthentication là mọi exception của UseRouting, UseSession,
+// UseRateLimiter và chính UseAuthentication đều thoát ra ngoài nó.
+//
+// ⚠ Và đây là lý do UseExceptionHandler("/Home/Error") đã bị GỠ chứ không giữ lại cho
+// chắc: nó nằm ở đúng vị trí này nên sẽ là lớp TRONG so với middleware của ta, mà lớp
+// trong bắt trước. Giữ cả hai thì trong Production - môi trường duy nhất nó quan trọng -
+// middleware này KHÔNG BAO GIỜ chạy, còn ở Development thì lại chạy. Tức hành vi xử lý
+// lỗi khác nhau giữa hai môi trường, theo chiều xấu nhất: thứ được kiểm bằng test là
+// thứ không chạy thật.
+app.UseMiddleware<GlobalExceptionMiddleware>();
+
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Home/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }

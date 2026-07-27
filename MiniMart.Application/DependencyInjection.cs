@@ -22,6 +22,10 @@ public static class DependencyInjection
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<IOrderService, OrderService>();
 
+        // Scoped như mọi service khác: nó dùng IUnitOfWork và Repository, tức dùng
+        // chung DbContext của request.
+        services.AddScoped<IPaymentService, PaymentService>();
+
         // Singleton hợp lệ ở đây: PasswordHasher không giữ state và không phụ
         // thuộc DbContext. Nếu nó phụ thuộc thứ gì Scoped thì Singleton sẽ tạo
         // ra captive dependency - object Scoped bị giữ sống vĩnh viễn.

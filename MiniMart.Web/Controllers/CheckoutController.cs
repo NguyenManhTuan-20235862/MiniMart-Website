@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MiniMart.Application.Interfaces;
+using MiniMart.Application.Models;
 using MiniMart.Common.Exceptions;
 using MiniMart.Domain.Interfaces;
 using MiniMart.Web.Models;
@@ -27,6 +28,7 @@ public class CheckoutController : Controller
 {
     private readonly ICartService _cartService;
     private readonly IOrderService _orderService;
+    private readonly IPaymentService _paymentService;
     private readonly ICurrentUser _currentUser;
 
     // Chỉ inject abstraction. Controller không biết giỏ nằm ở Session hay DB - với
@@ -35,10 +37,12 @@ public class CheckoutController : Controller
     public CheckoutController(
         ICartService cartService,
         IOrderService orderService,
+        IPaymentService paymentService,
         ICurrentUser currentUser)
     {
         _cartService = cartService;
         _orderService = orderService;
+        _paymentService = paymentService;
         _currentUser = currentUser;
     }
 
@@ -79,10 +83,7 @@ public class CheckoutController : Controller
             return RedirectToAction("Index", "Cart");
         }
 
-        // ChoPhepSua: false -> bảng chỉ để ĐỌC LẠI. Cho sửa số lượng ngay tại đây sẽ
-        // khiến form POST về /Cart/UpdateQuantity rồi redirect về /Cart, tức người dùng
-        // bị đá khỏi luồng đặt hàng mà không hiểu vì sao.
-        return View(new CartTableViewModel(cart, ChoPhepSua: false));
+        return View(new CheckoutViewModel { Cart = cart });
     }
 
     /// <summary>
@@ -91,43 +92,116 @@ public class CheckoutController : Controller
     /// kỳ là đặt đơn hộ người khác.
     ///
     /// <para>
-    /// Không nhận tham số nào từ request - kể cả <c>userId</c>. Toàn bộ đầu vào là
-    /// giỏ hàng dưới DB + danh tính từ cookie, nên không có gì để giả mạo.
+    /// Nhận thông tin giao hàng từ form, nhưng KHÔNG nhận <c>userId</c>. Ranh giới là:
+    /// dữ liệu người dùng tự khai về đơn của họ thì phải đến từ request; DANH TÍNH thì
+    /// tuyệt đối không - nhận nó từ form là mở lỗ IDOR (đặt đơn dưới tên người khác).
     /// </para>
     /// </summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Confirm(CancellationToken cancellationToken)
+    public async Task<IActionResult> Confirm(
+        CheckoutViewModel form,
+        CancellationToken cancellationToken)
     {
+        if (!ModelState.IsValid)
+        {
+            return await RenderLaiFormAsync(form, cancellationToken);
+        }
+
         try
         {
-            var ketQua = await _orderService.CheckoutAsync(UserId, cancellationToken);
+            var ketQua = await _orderService.CheckoutAsync(
+                UserId,
+                new ShippingInfo(form.RecipientName, form.RecipientPhone, form.ShippingAddress),
+                cancellationToken);
+
+            if (form.PhuongThuc == PhuongThucThanhToan.VnPay)
+            {
+                // Đơn đã tạo xong và đang ở Pending. Giờ mới dựng lệnh thanh toán -
+                // THỨ TỰ này bắt buộc: vnp_TxnRef là OrderId và vnp_Amount là
+                // TotalAmount đã chốt, cả hai chỉ tồn tại sau khi đơn được lưu.
+                var url = await _paymentService.TaoUrlThanhToanAsync(
+                    ketQua.OrderId,
+                    UserId,
+
+                    // IP THẬT của khách, VNPay dùng cho chống gian lận. "unknown" chỉ
+                    // xảy ra trong test (WebApplicationFactory không có kết nối thật).
+                    HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    cancellationToken);
+
+                // Redirect chứ KHÔNG LocalRedirect: đích nằm ở tên miền khác.
+                //
+                // Đây là ngoại lệ có kiểm soát với quy tắc chống open-redirect: URL này
+                // do SERVER dựng từ BaseUrl trong cấu hình, không có một ký tự nào đến
+                // từ request. Nhận URL đích từ query string rồi Redirect mới là lỗ hổng.
+                return Redirect(url);
+            }
 
             // Post-Redirect-Get: sau khi đặt hàng thành công BẮT BUỘC redirect, nếu
             // không thì người dùng bấm F5 sẽ được hỏi gửi lại form - và lần này gửi
             // lại nghĩa là đặt thêm một đơn nữa.
             return RedirectToAction(nameof(Success), new { id = ketQua.OrderId });
         }
-        // Ba nhánh dưới đều đẩy về /Cart chứ không render lại /Checkout: cả ba đều
-        // cần người dùng SỬA giỏ hàng, mà trang /Checkout cố ý không sửa được.
         catch (InsufficientStockException ex)
         {
-            // Thông báo đã nói rõ sản phẩm nào và còn bao nhiêu - dùng nguyên văn.
-            TempData["CartNotice"] = ex.Message;
+            // ★ ĐỔI SO VỚI TRƯỚC: render lại form thay vì redirect về /Cart.
+            //
+            // Lý do đổi là form địa chỉ vừa xuất hiện. Redirect vứt sạch mọi thứ người
+            // dùng vừa gõ, nên họ mất địa chỉ chỉ vì có người khác mua trước - một lỗi
+            // hoàn toàn không phải của họ. PRG vẫn giữ nguyên cho nhánh THÀNH CÔNG
+            // (nơi bấm F5 tạo đơn trùng); gửi lại một POST đã thất bại thì không tạo
+            // ra đơn thứ hai nào.
+            //
+            // ex.Message đã nói rõ sản phẩm nào và còn bao nhiêu - dùng nguyên văn,
+            // đây chính là thông báo sinh ra từ nhánh xung đột RowVersion.
+            ModelState.AddModelError(string.Empty, ex.Message);
         }
         catch (NotFoundException)
         {
-            TempData["CartNotice"] =
-                "Có sản phẩm trong giỏ không còn được bán. Vui lòng kiểm tra lại giỏ hàng.";
+            ModelState.AddModelError(string.Empty,
+                "Có sản phẩm trong giỏ không còn được bán. Vui lòng kiểm tra lại giỏ hàng.");
         }
         catch (EmptyCartException ex)
         {
-            // Index đã chặn giỏ rỗng, nên tới được đây nghĩa là giỏ vừa bị làm rỗng
-            // ở tab khác hoặc sản phẩm vừa bị gỡ bán.
+            // Nhánh DUY NHẤT vẫn redirect: giỏ rỗng thì không còn gì để render trên
+            // trang xác nhận, và giữ người dùng ở đây là bắt họ nhìn một cái bảng
+            // trống. Index cũng chặn y hệt vì cùng lý do đó.
             TempData["CartNotice"] = ex.Message;
+
+            return RedirectToAction("Index", "Cart");
         }
 
-        return RedirectToAction("Index", "Cart");
+        return await RenderLaiFormAsync(form, cancellationToken);
+    }
+
+    /// <summary>
+    /// Hiện lại trang xác nhận kèm lỗi, GIỮ NGUYÊN những gì người dùng đã gõ.
+    ///
+    /// <para>
+    /// Bắt buộc nạp lại <c>form.Cart</c>: nó có <c>[BindNever]</c> nên sau model
+    /// binding luôn rỗng. Quên dòng đó thì trang hiện ra với giỏ hàng TRỐNG kèm một
+    /// thông báo lỗi - và không có exception nào báo, vì <c>CartView.Empty</c> là một
+    /// giá trị hoàn toàn hợp lệ.
+    /// </para>
+    /// </summary>
+    private async Task<IActionResult> RenderLaiFormAsync(
+        CheckoutViewModel form,
+        CancellationToken cancellationToken)
+    {
+        form.Cart = await _cartService.GetCartAsync(cancellationToken);
+
+        if (form.Cart.IsEmpty)
+        {
+            TempData["CartNotice"] = "Giỏ hàng đang trống nên chưa thể đặt hàng.";
+
+            return RedirectToAction("Index", "Cart");
+        }
+
+        // View(nameof(Index), ...) chứ không phải View(): action đang chạy tên là
+        // Confirm nên View() sẽ đi tìm Views/Checkout/Confirm.cshtml - file không tồn
+        // tại, và đây là loại lỗi build-được-nhưng-nổ-lúc-chạy giống hệt việc ghi sai
+        // tên layout trong _ViewStart.
+        return View(nameof(Index), form);
     }
 
     /// <summary>Trang cảm ơn. Đọc lại đơn từ DB thay vì nhận qua TempData.</summary>

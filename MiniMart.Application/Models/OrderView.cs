@@ -23,6 +23,7 @@ public sealed record OrderView(
     int Id,
     DateTime CreatedAt,
     decimal TotalAmount,
+    ShippingInfo Shipping,
     IReadOnlyList<OrderLineView> Lines)
 {
     public int TotalQuantity => Lines.Sum(l => l.Quantity);

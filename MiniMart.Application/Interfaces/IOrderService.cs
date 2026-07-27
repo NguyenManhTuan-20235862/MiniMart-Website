@@ -1,4 +1,5 @@
 using MiniMart.Application.Models;
+using MiniMart.Domain.Enums;
 
 namespace MiniMart.Application.Interfaces;
 
@@ -14,6 +15,17 @@ public interface IOrderService
     /// không nhận từ form hay query string: nhận từ request là mở đúng một lỗ IDOR -
     /// đặt đơn và trừ tồn kho dưới tên người khác.
     /// </param>
+    /// <param name="shipping">
+    /// Người nhận và nơi giao. KHÁC <paramref name="userId"/> ở một điểm cốt lõi: đây
+    /// là dữ liệu người dùng TỰ KHAI về chính đơn của họ, nên nó BẮT BUỘC đến từ form.
+    /// Nhận nó từ request không mở lỗ IDOR nào - nó không quyết định đơn thuộc về ai,
+    /// chỉ nói hàng giao tới đâu.
+    /// </param>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="shipping"/> thiếu trường. Là <c>ArgumentException</c> chứ không
+    /// phải exception nghiệp vụ vì tầng Web đã chặn bằng <c>[Required]</c> - tới được
+    /// đây nghĩa là lỗi LẬP TRÌNH, và phải nổ to thay vì lưu một đơn không giao được.
+    /// </exception>
     /// <exception cref="Common.Exceptions.EmptyCartException">Giỏ rỗng.</exception>
     /// <exception cref="Common.Exceptions.NotFoundException">
     /// Sản phẩm trong giỏ đã bị xoá khỏi shop.
@@ -23,7 +35,39 @@ public interface IOrderService
     /// <c>RowVersion</c> lệch lúc ghi. Hai nguyên nhân, một exception, vì với người
     /// dùng chúng là cùng một chuyện.
     /// </exception>
-    Task<CheckoutResult> CheckoutAsync(int userId, CancellationToken cancellationToken = default);
+    Task<CheckoutResult> CheckoutAsync(
+        int userId,
+        ShippingInfo shipping,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Đổi trạng thái thanh toán của một đơn, kèm kiểm tra chuyển trạng thái hợp lệ.
+    ///
+    /// <para>
+    /// ★ <b>KHÔNG gọi <c>SaveChangesAsync</c></b>, khác mọi method public khác của
+    /// tầng Application. Đây là chủ ý, không phải quên - đừng "sửa" bằng cách thêm vào.
+    /// </para>
+    /// <para>
+    /// Lý do: người gọi duy nhất là luồng IPN, và ở đó việc đổi trạng thái đơn phải
+    /// nguyên tử với việc ghi bản ghi <c>Payment</c>. Nếu method này tự lưu thì có HAI
+    /// <c>SaveChanges</c>, và giữa chúng tồn tại một khoảnh khắc đơn đã <c>Paid</c> mà
+    /// chưa có bản ghi thanh toán nào - tiền đã thu mà không tra được từ đâu. Để người
+    /// gọi quyết định ranh giới transaction là cách duy nhất giữ hai thay đổi đó trong
+    /// cùng một lần ghi.
+    /// </para>
+    /// <para>
+    /// Đây cũng là nơi DUY NHẤT trong hệ thống được phép ghi <c>Order.Status</c>. Gom
+    /// về một chỗ để luật chuyển trạng thái có đúng một nơi để sống.
+    /// </para>
+    /// </summary>
+    /// <exception cref="Common.Exceptions.NotFoundException">Không có đơn với id này.</exception>
+    /// <exception cref="Common.Exceptions.InvalidOrderStatusTransitionException">
+    /// Chuyển trạng thái không hợp lệ (VD <c>Paid</c> -> <c>Pending</c>).
+    /// </exception>
+    Task UpdatePaymentStatusAsync(
+        int orderId,
+        OrderStatus status,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Một đơn hàng CỦA CHÍNH người này. Trả <c>null</c> nếu đơn không tồn tại
