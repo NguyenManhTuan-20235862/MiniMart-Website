@@ -78,6 +78,8 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 | `Stock -= n` mà cột không phải concurrency token | **Oversell** — đã đo: bán 10 khi có 5 |
 | Chạm nhiều dòng không theo thứ tự cố định | Deadlock, chỉ xuất hiện dưới tải |
 | Nhận `userId` từ form thay vì `ICurrentUser` | IDOR: đặt đơn / đọc đơn dưới tên người khác |
+| Trả **403** thay vì **404** cho đơn của người khác | 403 xác nhận "đơn số 42 có tồn tại", mà Id tuần tự nên đoán được |
+| `Include(o => o.Items)` rồi `Sum` trong C# ở trang danh sách | Màn hình hiện **đúng** con số, chỉ là kéo về mọi dòng đơn của cả trang — chỉ test đếm lệnh SQL bắt được |
 | Quên `builder.Ignore()` cho property tính toán | Migration sinh cột không bao giờ được ghi |
 | Đọc lại `product.Price` khi tính tổng đơn | Tổng đơn lệch khỏi tổng các dòng |
 | `type="number"` cho ô số điện thoại | Mất số `0` đứng đầu, chặn luôn dấu `+` |
@@ -203,8 +205,9 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
   `ProductBulkUpdateTests`, `ProductConcurrencyTests`). Ngưỡng gộp của dự án là bản thứ ba
   nên nó đã quá hạn. Ba bản cũ còn chấp nhận **200** là đăng nhập thành công — mà 200 chính
   là đăng nhập THẤT BẠI; chỉ bản trong `ProductBulkUpdateTests` đã siết thành đúng 302.
-- **Chưa có trang "Đơn hàng của tôi".** Đã có `IOrderService.GetMyOrderAsync` cho một đơn,
-  chưa có danh sách. Index `(UserId, CreatedAt DESC)` trên `Orders` đã dựng sẵn cho việc đó.
+- **Trang "Đơn hàng của tôi" chưa có nút thanh toán lại.** Đơn `Pending` hiện chỉ nói rõ
+  là chưa ghi nhận thanh toán, không có đường trả tiền — bị chặn bởi `vnp_TxnRef = OrderId`.
+  Cố ý không hiện nút bấm vào ra lỗi.
 - **`Order` chưa có `Status`** — cố ý. Thêm cột trạng thái trước khi biết đơn có những trạng
   thái nào là đoán, cùng lý do đã hoãn API transaction cho tới đúng lúc cần.
 
@@ -221,6 +224,9 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
   7 test và 3 mutation. Đừng thêm `cartItemId` vào request model "cho tiện".
 - ~~`IUnitOfWork` chưa có API transaction~~ → đã thêm **đúng lúc** làm nghiệp vụ đặt hàng,
   như điều kiện đã đặt ra từ đầu. `ITransaction` ở Domain bọc `IDbContextTransaction`.
+- ~~Trang "Đơn hàng của tôi"~~ → đã làm ở Phase 9. Danh sách dùng read model riêng
+  (`OrderSummary`) chiếu ngay trong truy vấn; đừng "đơn giản hoá" thành `Include(o => o.Items)`,
+  xem `.claude/rules/data-access.md`.
 - ~~Trừ tồn kho chống oversell~~ → đã làm bằng Optimistic trên `Products.RowVersion`, có
   test song song trên SQL Server thật. Đừng đổi `IsRowVersion()` — mutation đã chứng minh
   bỏ nó đi là bán 10 món khi chỉ có 5.

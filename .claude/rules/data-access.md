@@ -73,6 +73,36 @@ Tiêu chí phân loại, không phải cảm tính:
   nhiều thao tác trước một `SaveChanges`. Xem `.claude/rules/cart.md` — đây là chỗ đã
   phát sinh một bug thật.
 
+## Read model: chiếu trong truy vấn, đừng Include rồi đếm trong bộ nhớ
+
+Trang danh sách và trang chi tiết cần hai read model KHÁC nhau, và đó là quyết định về
+hiệu năng chứ không phải về gu:
+
+| | Danh sách (`OrderSummary`) | Chi tiết (`OrderView`) |
+|---|---|---|
+| Cần gì | tổng tiền, trạng thái, **số món** | từng dòng đơn |
+| Cách lấy | `.Select(o => new OrderSummary(..., o.Items.Sum(i => i.Quantity)))` | `.Include(o => o.Items)` |
+| SQL sinh ra | subquery `SUM` — **không dòng `OrderDetail` nào rời DB** | JOIN, kéo đủ dòng |
+
+```sql
+-- Chiếu: EF dịch o.Items.Sum(...) thành subquery, cột ProductName/UnitPrice KHÔNG có mặt
+SELECT [o].[Id], [o].[CreatedAt], [o].[TotalAmount], [o].[Status], (
+    SELECT COALESCE(SUM([o0].[Quantity]), 0)
+    FROM [OrderDetails] AS [o0]
+    WHERE [o].[Id] = [o0].[OrderId])
+FROM [Orders] AS [o]
+WHERE [o].[UserId] = @userId
+ORDER BY [o].[CreatedAt] DESC, [o].[Id] DESC
+OFFSET @p ROWS FETCH NEXT @p2 ROWS ONLY
+```
+
+- ⚠ **Đổi sang `Include` + `Sum` trong C# cho ra ĐÚNG cùng con số trên màn hình.** Đã
+  mutation test: 17 test hành vi vẫn xanh, **chỉ test đếm số lệnh SQL** đỏ. Đây là loại
+  sai không có triệu chứng nào ngoài hoá đơn database — nên nó phải được canh bằng test
+  khẳng định thẳng vào SQL (`MyOrdersSqlTests`), không phải bằng test nội dung trang.
+- Read model của danh sách đặt ở **Domain/ValueObjects** vì `IOrderRepository` (Domain)
+  khai báo nó trong chữ ký. Cùng chỗ với `CartLine`.
+
 ## Validate nghiệp vụ — luôn làm ở HAI nơi
 Quy tắc chung của dự án: **validate ở Service để có thông báo tử tế, ràng buộc ở DB để có sự thật.**
 - Kiểm tra ở Service luôn có khe TOCTOU (giữa lúc kiểm tra và lúc lưu).
