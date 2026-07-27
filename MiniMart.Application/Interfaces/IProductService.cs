@@ -1,3 +1,4 @@
+using MiniMart.Application.Models;
 using MiniMart.Common;
 using MiniMart.Domain.Entities;
 
@@ -24,6 +25,14 @@ public interface IProductService
     Task<List<Product>> GetByCategoryAsync(int categoryId, CancellationToken cancellationToken = default);
 
     Task<Product?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Nhiều sản phẩm trong MỘT truy vấn. Trả về ít phần tử hơn số id truyền vào nếu
+    /// có sản phẩm đã bị xoá — người gọi phải xử lý trường hợp đó.
+    /// </summary>
+    Task<List<Product>> GetByIdsAsync(
+        IEnumerable<int> ids,
+        CancellationToken cancellationToken = default);
 
     Task<Product> CreateAsync(
         string name,
@@ -58,4 +67,57 @@ public interface IProductService
         CancellationToken cancellationToken = default);
 
     Task DeleteAsync(int id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sửa giá và tồn kho của NHIỀU sản phẩm trong một lần lưu, mỗi dòng một giá trị
+    /// riêng và mỗi dòng một <c>RowVersion</c> riêng.
+    ///
+    /// <para>
+    /// <b>Thành công một phần là kết cục HỢP LỆ ở đây.</b> Dòng nào có
+    /// <c>RowVersion</c> lệch thì bị BỎ QUA và báo lại qua
+    /// <see cref="BulkUpdateResult.XungDot"/>; các dòng còn lại vẫn được ghi. Đây là
+    /// khác biệt CÓ CHỦ Ý so với <c>OrderService.CheckoutAsync</c>, nơi một dòng hỏng
+    /// phải huỷ cả đơn: ở đó nửa vời nghĩa là khách trả tiền cho một đơn không đúng
+    /// thứ họ đặt, còn ở đây người dùng là Admin đang nhìn màn hình, và "18 dòng đã
+    /// lưu, 2 dòng cần xem lại" là một câu họ xử lý được ngay.
+    /// </para>
+    /// <para>
+    /// <b>Hai lớp kiểm, mỗi lớp bịt một cửa sổ khác nhau</b> — bỏ lớp nào cũng sai:
+    /// </para>
+    /// <list type="number">
+    /// <item>
+    /// So <c>RowVersion</c> trong bộ nhớ (giá trị vừa đọc lên với giá trị form gửi lên)
+    /// bịt cửa sổ RỘNG — vài phút bảng mở. Đây là thứ cho phép bỏ qua CHỌN LỌC, vì nó
+    /// chạy trước khi có câu UPDATE nào được sinh ra.
+    /// </item>
+    /// <item>
+    /// <c>SetExpectedRowVersion</c> + <c>WHERE RowVersion = @original</c> bịt cửa sổ
+    /// HẸP — vài mili giây giữa lệnh đọc và lệnh ghi. Lớp 1 một mình là TOCTOU kinh
+    /// điển; lớp này là bảo đảm thật.
+    /// </item>
+    /// </list>
+    /// <para>
+    /// Hệ quả của cửa sổ hẹp: nếu ai đó ghi ĐÚNG vào khoảng vài mili giây đó thì cả
+    /// batch bị bỏ và <c>ConcurrencyConflictException</c> nổi lên — tức trường hợp hiếm
+    /// này VẪN là tất-cả-hoặc-không-gì-cả. Không tự thử lại: thử lại sạch sẽ đòi một
+    /// <c>DbContext</c> mới nên không làm được trong cùng request (cùng lý do đã hoãn
+    /// retry cho đua tạo giỏ hàng lần đầu).
+    /// </para>
+    /// <para>
+    /// Dòng người dùng KHÔNG sửa thì không sinh câu <c>UPDATE</c> nào, nên
+    /// <c>RowVersion</c> cũ ở dòng đó cũng không bị coi là xung đột. Đã đo: chạm 4
+    /// entity mà chỉ đổi giá trị của 3 thì batch chỉ có 3 câu UPDATE.
+    /// </para>
+    /// </summary>
+    /// <exception cref="System.ArgumentException">
+    /// Danh sách có hai dòng cùng một <c>Id</c>. Form hợp lệ không tạo ra được tình
+    /// huống này; nếu bỏ qua thì dòng sau âm thầm đè dòng trước.
+    /// </exception>
+    /// <exception cref="MiniMart.Common.Exceptions.ConcurrencyConflictException">
+    /// CHỈ cho cửa sổ hẹp nói trên. Xung đột thông thường KHÔNG ném — nó nằm trong
+    /// <see cref="BulkUpdateResult.XungDot"/>.
+    /// </exception>
+    Task<BulkUpdateResult> BulkUpdatePriceStockAsync(
+        IReadOnlyList<ProductBulkUpdateItem> items,
+        CancellationToken cancellationToken = default);
 }

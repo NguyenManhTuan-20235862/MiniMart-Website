@@ -26,13 +26,18 @@ public class ProductFilter : IValidatableObject
     // Ràng buộc thuộc về BẢN THÂN giá trị (giá không thể âm) -> Data Annotation,
     // không phải Service. Dùng overload typeof(decimal) + chuỗi vì overload
     // Range(0, ...) nhận double và làm tròn nhị phân trước khi so với decimal.
+    //
+    // ParseLimitsInInvariantCulture là cờ chi phối việc parse hai chuỗi CẬN; thiếu nó
+    // thì máy vi-VN ném ArgumentException lúc validate. Xem rules/data-access.md.
     [Range(typeof(decimal), "0", "999999999",
+        ParseLimitsInInvariantCulture = true,
         ConvertValueInInvariantCulture = true,
         ErrorMessage = "Giá từ phải là số không âm.")]
     [Display(Name = "Giá từ")]
     public decimal? MinPrice { get; set; }
 
     [Range(typeof(decimal), "0", "999999999",
+        ParseLimitsInInvariantCulture = true,
         ConvertValueInInvariantCulture = true,
         ErrorMessage = "Giá đến phải là số không âm.")]
     [Display(Name = "Giá đến")]

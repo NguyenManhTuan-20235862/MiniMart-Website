@@ -5,7 +5,10 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2>Sản phẩm</h2>
-    <a asp-action="Create" class="btn btn-primary">Thêm sản phẩm</a>
+    <div class="d-flex gap-2">
+        <a asp-action="BulkEdit" class="btn btn-outline-primary">Sửa giá / tồn kho hàng loạt</a>
+        <a asp-action="Create" class="btn btn-primary">Thêm sản phẩm</a>
+    </div>
 </div>
 
 @if (Model.Count == 0)

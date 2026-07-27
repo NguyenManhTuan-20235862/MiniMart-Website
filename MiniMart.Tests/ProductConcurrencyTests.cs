@@ -243,7 +243,20 @@ public class ProductConcurrencyTests : IAsyncLifetime
                 continue;
             }
 
-            truong[ten] = Regex.Match(the, """value="([^"]*)""").Groups[1].Value;
+            // ★ BẮT BUỘC HtmlDecode, và đây là bug đã làm cả bộ test đỏ NGẪU NHIÊN.
+            //
+            // Base64 của rowversion đôi khi chứa ký tự '+', mà HtmlEncoder mã hoá nó
+            // thành "&#x2B;". Trình duyệt tự giải mã khi parse thuộc tính nên form thật
+            // gửi đi đúng chuỗi; helper này bóc chuỗi THÔ rồi POST lại nguyên xi, nên
+            // binder không giải mã được Base64, RowVersion về null, SetExpectedRowVersion
+            // bị bỏ qua, KHÔNG xung đột nào được phát hiện, và controller redirect thay
+            // vì render lại. Test đỏ ở assertion "Expected: OK / Actual: Found" - không
+            // một manh mối nào chỉ về dấu '+'.
+            //
+            // Chỉ nổ khi giá trị rowversion ngẫu nhiên sinh ra dấu '+', nên nó trông
+            // hệt như một test flaky do hạ tầng. Không phải: nó là bug thật của test.
+            truong[ten] = WebUtility.HtmlDecode(
+                Regex.Match(the, """value="([^"]*)""").Groups[1].Value);
         }
 
         // <select> không phải <input> nên vòng lặp trên bỏ sót.
@@ -267,7 +280,9 @@ public class ProductConcurrencyTests : IAsyncLifetime
     private static string LayHiddenValue(string html, string name)
     {
         var match = Regex.Match(html, $$"""<input[^>]*name="{{name}}"[^>]*value="([^"]*)"([^>]*)>""");
-        return match.Groups[1].Value;
+
+        // HtmlDecode vì Base64 có thể chứa '+' và HtmlEncoder mã hoá nó thành "&#x2B;".
+        return WebUtility.HtmlDecode(match.Groups[1].Value);
     }
 
     private async Task<HttpClient> TaoClientAdminAsync()
@@ -296,12 +311,30 @@ public class ProductConcurrencyTests : IAsyncLifetime
         }
 
         // Đăng nhập LẠI sau khi nâng quyền: claims là ảnh chụp lúc đăng nhập.
-        await PostFormAsync(client, "/Account/Login", new()
+        var dangNhap = await PostFormAsync(client, "/Account/Login", new()
         {
             ["Username"] = username,
             ["Password"] = password,
             ["RememberMe"] = "false"
         });
+
+        // ★ Khẳng định đăng nhập THÀNH CÔNG ngay tại đây, đừng để test tự phát hiện
+        // qua hệ quả.
+        //
+        // Lý do rất cụ thể: /Account/Login là endpoint DUY NHẤT có rate limit, và
+        // limiter phân vùng theo IP - mà mọi client của WebApplicationFactory đều có
+        // RemoteIpAddress = null, tức CẢ BỘ TEST dùng chung một hạn mức. Khi nó bị
+        // vượt, login trả 429, client không có cookie, request tới /Admin/... bị đá về
+        // trang đăng nhập, và test đỏ ở một assertion nói về Base64 RowVersion - không
+        // có manh mối nào chỉ về rate limit.
+        //
+        // Đã gặp thật: hai test ở file này đỏ trong một lần chạy toàn bộ rồi xanh lại
+        // ở lần sau, và xanh khi chạy riêng.
+        Assert.True(
+            dangNhap.StatusCode is HttpStatusCode.Found or HttpStatusCode.OK,
+            $"Đăng nhập thất bại với {(int)dangNhap.StatusCode}. "
+            + "429 nghĩa là bộ test đã vượt RateLimiting:LoginPermitLimit (dùng chung "
+            + "một hạn mức vì RemoteIpAddress luôn null trong WebApplicationFactory).");
 
         return client;
     }
