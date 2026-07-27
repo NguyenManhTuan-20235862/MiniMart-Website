@@ -53,3 +53,51 @@ Tiêu chí duy nhất: **biết giá trị này có làm được điều gì m�
   không có, nên CI ghi đè bằng biến môi trường
   `ConnectionStrings__DefaultConnection` (hai gạch dưới = cấu hình lồng nhau) — không sửa
   `appsettings.json`.
+
+## Bài học từ lần chạy CI đầu tiên
+
+CI viết từ lâu nhưng **chưa từng chạy** suốt 8 phase, vì trigger chỉ có `main` còn mọi
+việc diễn ra trên nhánh feature. Lần chạy đầu tiên tìm ra ba thứ mà đọc file YAML không
+thể biết trước — đúng như cảnh báo "đừng tin file YAML chỉ vì nó trông đúng".
+
+### 1. `run:` chạy trên RUNNER, không chạy trong service container
+Bước chờ SQL Server gọi `/opt/mssql-tools18/bin/sqlcmd`. Đường dẫn đó chỉ tồn tại trong
+image `mssql/server`; runner `ubuntu-latest` không có mssql-tools. Phải
+`docker exec ${{ job.services.<ten>.id }}` vào container, và thử **cả hai** đường dẫn
+(`mssql-tools` / `mssql-tools18`) vì tên thư mục đổi giữa các phiên bản image.
+
+### 2. Kết thúc dòng: `.editorconfig` một mình là chưa đủ
+`.editorconfig` khai `end_of_line = crlf`, nhưng repo không có `.gitattributes` nên cách
+checkout phụ thuộc `core.autocrlf` của **từng máy**:
+
+| Máy | Checkout ra | `dotnet format --verify-no-changes` |
+|---|---|---|
+| Windows (`autocrlf=true`) | CRLF | xanh |
+| Linux CI (mặc định) | LF | **đỏ** |
+
+Cùng một lệnh, cùng một commit, hai kết quả. Sửa bằng `.gitattributes` với
+`* text=auto eol=crlf` — repo quyết định thay vì máy quyết định. Blob trong git vẫn là LF
+nên không file nào đổi nội dung.
+
+### 3. Test dựa vào cấu hình VẮNG MẶT cũng phải tự dựng ra sự vắng mặt đó
+`Thieu_khoa_bi_mat_thi_ung_dung_TU_CHOI_KHOI_DONG` chỉ đặt `UseEnvironment("Production")`
+rồi tin rằng User Secrets không được nạp nên cấu hình sẽ thiếu. Đúng trên máy dev, **sai
+trên CI**: workflow đặt `VnPay__HashSecret` làm biến môi trường, mà biến môi trường được
+nạp ở MỌI environment. Phải `AddInMemoryCollection` với giá trị **rỗng** (thêm sau nên
+thắng biến môi trường). Đây là mặt còn lại của quy ước "test boot ở Production phải tự
+cấp cấu hình".
+
+### 4. ⭐ Một bug THẬT trong code, chỉ Linux mới lộ
+`Uri.TryCreate(x, UriKind.Absolute, out _)` cho kết quả **khác nhau theo hệ điều hành**:
+
+```
+"/Payment/Return"  ->  Windows: false      Linux: TRUE (file:///Payment/Return)
+```
+
+`VnPayOptionsValidator` dùng đúng lệnh đó để chặn URL tương đối, nên lệnh kiểm **vô hiệu
+trên chính môi trường triển khai** trong khi vẫn xanh trên máy dev. Phải kiểm cả
+`uri.Scheme` là `http`/`https`.
+
+Bài học cho test: case `/Payment/Return` chỉ bắt được lỗi trên Windows. Thêm case
+`file://` và `ftp://` thì bắt được trên **mọi** hệ điều hành — chọn dữ liệu test sao cho
+nó không phụ thuộc nền tảng, thay vì đợi CI chạy mới biết.

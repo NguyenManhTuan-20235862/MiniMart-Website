@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using MiniMart.Infrastructure.Payments;
@@ -92,11 +93,30 @@ public class VnPayOptionsTests
     [Fact]
     public void Thieu_khoa_bi_mat_thi_ung_dung_TU_CHOI_KHOI_DONG()
     {
-        // Environment "Production" -> User Secrets KHÔNG được nạp, và không cấp cấu
-        // hình in-memory nào. Đây đúng là hình dạng một lần triển khai bị quên biến
-        // môi trường.
+        // ★ Phải XOÁ TƯỜNG MINH cấu hình VNPay, không được dựa vào việc nó vắng mặt.
+        //
+        // Bản trước chỉ đặt environment = "Production" rồi tin rằng User Secrets không
+        // được nạp nên cấu hình sẽ thiếu. Đúng trên máy dev, SAI trên CI: workflow đặt
+        // biến môi trường VnPay__TmnCode và VnPay__HashSecret, mà biến môi trường thì
+        // được nạp ở MỌI environment. Cấu hình có đủ -> không exception nào -> test đỏ.
+        //
+        // Đây là mặt còn lại của quy ước đã có ở rules/build.md ("test boot ở Production
+        // phải TỰ CẤP cấu hình VNPay"): test cần cấu hình THIẾU cũng phải tự dựng ra
+        // tình trạng thiếu đó, thay vì mượn một đặc điểm của máy đang chạy.
+        //
+        // AddInMemoryCollection được thêm SAU nên nó thắng biến môi trường.
         using var factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder => builder.UseEnvironment("Production"));
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Production");
+
+                builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["VnPay:TmnCode"] = string.Empty,
+                        ["VnPay:HashSecret"] = string.Empty
+                    }));
+            });
 
         // ★ Test này tồn tại vì một mutation đã LỌT LƯỚI: bỏ .ValidateOnStart() đi thì
         // toàn bộ 399 test khác vẫn xanh. Options được tạo LƯỜI nên không ai chạm tới
@@ -158,6 +178,40 @@ public class VnPayOptionsTests
         // xa chỗ gây lỗi và không còn manh mối nào chỉ về cấu hình.
         Assert.True(ketQua.Failed);
         Assert.Contains("tuyệt đối", ketQua.FailureMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Mọi scheme KHÔNG phải http/https đều bị từ chối.
+    ///
+    /// <para>
+    /// Test này sinh ra từ một bug do CI tìm ra: lệnh kiểm cũ chỉ hỏi
+    /// <c>Uri.TryCreate(..., UriKind.Absolute, ...)</c>, mà hàm đó trả kết quả KHÁC NHAU
+    /// theo hệ điều hành - <c>"/Payment/Return"</c> là false trên Windows nhưng
+    /// <b>true</b> trên Linux (Unix coi nó là <c>file:///Payment/Return</c>). Nghĩa là
+    /// lệnh kiểm vô hiệu trên chính môi trường triển khai.
+    /// </para>
+    /// <para>
+    /// <c>file://</c> và <c>ftp://</c> có mặt trong danh sách vì chúng cho ra cùng một
+    /// kết quả trên MỌI hệ điều hành - nhờ vậy test bắt được lỗi kể cả khi chạy trên
+    /// Windows, thay vì phải đợi CI Linux mới lộ ra.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("/Payment/Return")]
+    [InlineData("file:///tmp/payment-return")]
+    [InlineData("ftp://sandbox.vnpayment.vn/return")]
+    [InlineData("Payment/Return")]
+    public void Chi_chap_nhan_http_va_https(string urlSai)
+    {
+        var options = new VnPayOptions
+        {
+            TmnCode = HopLe.TmnCode,
+            HashSecret = HopLe.HashSecret,
+            BaseUrl = HopLe.BaseUrl,
+            ReturnUrl = urlSai
+        };
+
+        Assert.True(new VnPayOptionsValidator().Validate(null, options).Failed);
     }
 
     [Fact]

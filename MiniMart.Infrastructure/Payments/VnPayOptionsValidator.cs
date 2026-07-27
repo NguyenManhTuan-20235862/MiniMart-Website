@@ -50,10 +50,21 @@ public class VnPayOptionsValidator : IValidateOptions<VnPayOptions>
             {
                 loi.Add($"Thiếu '{khoa}'.");
             }
-            else if (!Uri.TryCreate(giaTri, UriKind.Absolute, out _))
+            // ★ Phải kiểm CẢ SCHEME, không chỉ "có phải URI tuyệt đối không".
+            //
+            // `Uri.TryCreate(x, UriKind.Absolute, ...)` cho kết quả KHÁC NHAU theo hệ
+            // điều hành: với "/Payment/Return" nó trả false trên Windows nhưng TRUE trên
+            // Linux, vì Unix coi đường dẫn bắt đầu bằng '/' là một file URI tuyệt đối
+            // (file:///Payment/Return). Lệnh kiểm cũ vì vậy vô hiệu trên chính môi
+            // trường triển khai, trong khi vẫn xanh trên máy dev Windows.
+            //
+            // Đây là bug do CI tìm ra ở lần chạy thứ hai của dự án - loại lỗi mà không
+            // lần thử tay nào trên Windows chạm tới được.
+            else if (!Uri.TryCreate(giaTri, UriKind.Absolute, out var uri)
+                     || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             {
                 loi.Add(
-                    $"'{khoa}' phải là URL TUYỆT ĐỐI (có http:// hoặc https://), " +
+                    $"'{khoa}' phải là URL TUYỆT ĐỐI dùng http:// hoặc https://, " +
                     $"đang là '{giaTri}'. VNPay là hệ thống khác nên đường dẫn tương đối vô nghĩa.");
             }
         }
