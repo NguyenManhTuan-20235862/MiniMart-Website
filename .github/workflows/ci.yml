@@ -1,10 +1,25 @@
 name: CI
 
 on:
+  # Chạy trên MỌI nhánh, không chỉ main. Cấu hình cũ (chỉ main) nghe an toàn nhưng có
+  # hệ quả là CI không chạy một lần nào suốt 8 phase: công việc diễn ra trên nhánh
+  # feature, mà nhánh feature thì không kích hoạt gì cả. Một CI chỉ chạy lúc merge là
+  # một CI phát hiện vấn đề ở đúng lúc đắt nhất để sửa.
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
+
+  # Cho phép bấm "Run workflow" tay trên tab Actions - hữu ích khi muốn chạy lại mà
+  # không cần tạo commit rỗng.
+  workflow_dispatch:
+
+# Push liên tiếp vào cùng một nhánh thì huỷ lần chạy cũ: kết quả của commit đã bị thay
+# thế không còn ai quan tâm, mà nó vẫn chiếm runner. Cũng dập luôn việc chạy hai lần
+# khi một nhánh vừa được push vừa đang có PR mở.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
@@ -57,18 +72,34 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Chờ SQL Server sẵn sàng
-        # Container báo "started" trước khi engine nhận kết nối. Không chờ thì
-        # bước migration đổ ở lần chạy đầu và CI đỏ ngẫu nhiên.
+        # Container báo "started" trước khi engine nhận kết nối. Không chờ thì bước
+        # migration đổ ở lần chạy đầu và CI đỏ ngẫu nhiên.
+        #
+        # ★ Chạy sqlcmd BÊN TRONG container qua `docker exec`, không chạy trên runner.
+        # Bản trước gọi thẳng /opt/mssql-tools18/bin/sqlcmd và nó KHÔNG BAO GIỜ chạy
+        # được: `run:` thực thi trên runner ubuntu-latest, mà runner không có
+        # mssql-tools. Đường dẫn đó chỉ tồn tại trong image mssql/server.
+        #
+        # Thử cả hai đường dẫn vì tên thư mục đổi giữa các phiên bản image
+        # (mssql-tools -> mssql-tools18), và ta không kiểm soát được image nào được kéo về.
+        env:
+          SA_PASSWORD: ${{ secrets.CI_SQL_PASSWORD || 'Ci_MiniMart_2026!' }}
+          CONTAINER_ID: ${{ job.services.sqlserver.id }}
         run: |
-          for i in {1..30}; do
-            if /opt/mssql-tools18/bin/sqlcmd -S localhost,1433 -U sa \
-                -P "${{ secrets.CI_SQL_PASSWORD || 'Ci_MiniMart_2026!' }}" \
-                -C -Q "SELECT 1" > /dev/null 2>&1; then
-              echo "SQL Server san sang sau ${i}s"; exit 0
-            fi
+          for i in $(seq 1 60); do
+            for tool in /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd; do
+              if docker exec "$CONTAINER_ID" "$tool" \
+                  -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT 1" > /dev/null 2>&1; then
+                echo "SQL Server san sang sau ${i}s (dung $tool)"
+                exit 0
+              fi
+            done
             sleep 1
           done
-          echo "SQL Server khong phan hoi sau 30s"; exit 1
+
+          echo "SQL Server khong phan hoi sau 60s. Log cua container:"
+          docker logs "$CONTAINER_ID" | tail -40
+          exit 1
 
       - name: Restore
         # Dự án dùng Central Package Management: version nằm ở
