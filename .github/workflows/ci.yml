@@ -116,7 +116,42 @@ jobs:
             -p MiniMart.Infrastructure -s MiniMart.Web --no-build --configuration Release
 
       - name: Test
-        run: dotnet test --no-build --configuration Release --logger "console;verbosity=normal"
+        run: >-
+          dotnet test --no-build --configuration Release
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=ket-qua.trx"
+          --results-directory TestResults
+
+      # Không có bước này thì một lần chạy đỏ chỉ để lại đúng một dòng
+      # "Process completed with exit code 1" trong annotation, và muốn biết test nào
+      # hỏng thì bắt buộc phải mở log trong trình duyệt - mà log của Actions cần đăng
+      # nhập, nên không công cụ nào ngoài trình duyệt đọc được.
+      #
+      # `::error::` là workflow command: mỗi dòng in ra thành một annotation, và
+      # annotation ĐỌC ĐƯỢC qua REST API công khai. Nhờ vậy chẩn đoán được từ dòng lệnh.
+      - name: Nêu tên test đỏ thành annotation
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          soDo = 0
+
+          for duongDan in glob.glob('TestResults/**/*.trx', recursive=True):
+              for ketQua in ET.parse(duongDan).getroot().iter(f'{{{ns["t"]}}}UnitTestResult'):
+                  if ketQua.get('outcome') != 'Failed':
+                      continue
+
+                  soDo += 1
+                  ten = ketQua.get('testName')
+                  loi = ketQua.find(f'{{{ns["t"]}}}Output/{{{ns["t"]}}}ErrorInfo/{{{ns["t"]}}}Message')
+                  thongBao = ' '.join((loi.text or '').split())[:400] if loi is not None else '(khong co thong bao)'
+
+                  print(f'::error title=Test do::{ten} -- {thongBao}')
+
+          print(f'::error title=Tong ket::Co {soDo} test do.')
+          PY
 
   format:
     runs-on: ubuntu-latest
