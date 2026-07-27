@@ -17,9 +17,20 @@ tự do và chỉ kiểm tra lúc ghi.
 - `SetExpectedRowVersion` ghi vào **`OriginalValue`**, KHÔNG phải `CurrentValue`. EF Core
   kẹp `OriginalValue` vào `WHERE`; `CurrentValue` của cột `rowversion` do SQL Server tự
   sinh nên gán vào đó không có tác dụng. Đã mutation test: `CurrentValue` làm 3 test đỏ.
-- View render Base64 **thủ công** (`Convert.ToBase64String`), KHÔNG dùng `asp-for`:
-  `InputTagHelper` gọi `ToString()` trên `byte[]` và cho ra `"System.Byte[]"` — form vẫn
-  submit, model binder không giải mã được, tính năng biến mất trong im lặng.
+- View render Base64 **thủ công** (`Convert.ToBase64String`), KHÔNG dùng `asp-for`.
+  **Điều kiện của cái bẫy đã được ĐO lại và tinh tế hơn mô tả cũ:**
+
+  | Cách viết | Kết quả |
+  |---|---|
+  | `<input type="hidden" asp-for="RowVersion" />` | Base64 **đúng** |
+  | `<input asp-for="RowVersion" />` | **`"System.Byte[]"`** |
+
+  `DefaultHtmlGenerator.GenerateHidden` có nhánh riêng mã hoá `byte[]` sang Base64, còn
+  đường input thường gọi `ToString()`. Nghĩa là code dùng `asp-for` kèm `type="hidden"`
+  vẫn chạy đúng — cho tới khi ai đó bỏ `type="hidden"` đi, và lúc đó concurrency biến
+  mất trong im lặng. Viết tay thì kết quả không phụ thuộc chi tiết đó.
+  Chiều ngược lại (POST) model binder tự giải mã Base64 → `byte[]`, nên chỉ chiều
+  **render** mới phải làm tay.
 - Nhận `RowVersion` từ client KHÔNG vi phạm chống over-posting: client chỉ đọc rồi trả
   lại nguyên vẹn. Gửi phiên bản cũ → chính họ nhận lỗi; gửi phiên bản mới → tương đương
   vừa mở lại form. Không có đặc quyền nào giành được.
@@ -74,6 +85,31 @@ tử (một `SaveChanges` đã tự nguyên tử), nhưng nó là **lưới an t
 kinh điển — "lưu từng món cho chắc" — từ bug dữ liệu thành chuyện không xảy ra. Đó là lý do
 giữ nó, chứ không phải vì nó đang gánh atomicity.
 
+### Xoá giỏ hàng nằm TRONG transaction, không phải sau commit
+
+Câu hỏi "side effect phải đặt sau khi commit chứ?" là quy tắc thật, nhưng nó áp cho thứ
+**không rollback được** (gửi mail, gọi webhook, ghi Redis, xoá file). Giỏ hàng của người đã
+đăng nhập nằm ở **cùng database, cùng transaction** nên nó không phải side effect — nó là
+một phần của cùng một thay đổi dữ liệu. Vì vậy `_cartStore.ClearAsync` đứng **trước**
+`SaveChangesAsync`, và `DELETE CartItems` đi chung batch với `INSERT Order`.
+
+Đã mutation test (chuyển `ClearAsync` xuống sau `CommitAsync`): **5 test đỏ**. Cơ chế trực
+tiếp là `DatabaseCartStore` chỉ đánh dấu Change Tracker, mà sau `Commit` không còn
+`SaveChanges` nào → giỏ **không bao giờ được xoá**. Nhưng kể cả khi thêm một `SaveChanges`
+thứ hai thì vẫn sai, vì nó mở ra một cửa sổ có trạng thái quan sát được:
+
+| Thứ tự | Chết giữa chừng thì sao |
+|---|---|
+| Xoá giỏ **trong** transaction (hiện tại) | Không có trạng thái trung gian — hoặc có đơn và giỏ rỗng, hoặc không có gì |
+| Xoá giỏ **sau** commit | Đơn đã tạo, tiền đã tính, **giỏ vẫn đầy** → người dùng bấm đặt lần nữa, đơn trùng |
+| Xoá giỏ **trước** transaction | **Mất giỏ mà không có đơn** — tệ nhất |
+
+⚠ Điều này đúng vì `ICartStore` tại `/Checkout` **luôn** là `DatabaseCartStore`
+(`[Authorize]`). Nếu sau này cho khách vãng lai đặt hàng thì kho là `SessionCartStore`, mà
+`ClearAsync` của nó **ghi ngay lập tức, ngoài mọi transaction** — lúc đó vị trí hiện tại
+thành "xoá giỏ trước khi biết đơn có lưu được không", và rollback DB không hoàn lại Session.
+Chỉ khi đó câu hỏi "sau commit" mới trở thành đúng, và chỉ đúng cho kho không giao dịch.
+
 ### Test concurrency phải trông như thế nào
 - SQL Server **thật**, `Task.WhenAll`, mỗi "người mua" một **DI scope riêng** (DbContext
   riêng). Dùng chung scope là hai bên nhìn cùng một entity trong bộ nhớ — không xung đột
@@ -109,3 +145,140 @@ giỏ. Hệ quả: nhánh `NotFoundException` trong `CheckoutAsync` gần như k
 DB — chỉ tới được qua khe race rất hẹp (sản phẩm bị xoá đúng giữa `GetLinesAsync` và
 `GetManyForUpdateAsync`). Một test viết sai vì tưởng nhánh đó dễ chạm đã đỏ và phải sửa lại
 theo hành vi thật: đặt hàng đi tiếp bình thường với các món còn lại.
+
+## Sửa hàng loạt (BulkUpdatePriceStockAsync) — ba cách, và vì sao chọn cách thứ ba
+
+Bài toán khác hẳn "giảm giá 10% cả danh mục": **mỗi dòng một giá trị riêng** và **mỗi
+dòng một `RowVersion` riêng**. Ba cách đã cân nhắc:
+
+| | (a) `ExecuteUpdate` | (b) Dapper, 1 transaction | (c) Change tracking + 1 `SaveChanges` |
+|---|---|---|---|
+| Giá trị khác nhau mỗi dòng | **N lệnh** — `SET` là hằng số cho cả câu | 1 lệnh multi-exec | 1 batch |
+| Round-trip cho 20 dòng | **20** | 1 (+1 nếu cần đọc trước) | **1** (đã đo) |
+| `RowVersion` vào `WHERE` | **phải tự viết** | phải tự viết | **EF tự thêm** |
+| Biết dòng NÀO hỏng | có (rows-affected từng lệnh) | **không** — multi-exec chỉ trả TỔNG | có (`ex.Entries`) |
+| Dòng không sửa | vẫn UPDATE → **xung đột oan** | vẫn UPDATE → xung đột oan | **không sinh UPDATE** |
+| Thứ tự chạm dòng (deadlock) | tự sắp | tự sắp | **EF tự sắp theo khoá chính** (đã đo) |
+| Nguyên tử | tự mở transaction | tự mở transaction | transaction ngầm của `SaveChanges` |
+
+Đã đo bằng `LogTo` trên SQL Server thật (chạm 4 entity, đổi giá trị của 3):
+
+```sql
+-- (c): MỘT command, ba câu UPDATE, RowVersion tự vào WHERE
+UPDATE [Products] SET [Price] = @p0, [Stock] = @p1
+OUTPUT INSERTED.[RowVersion]
+WHERE [Id] = @p2 AND [RowVersion] = @p3;
+... (x3, KHÔNG có câu thứ tư)
+```
+
+- **`ExecuteUpdate` KHÔNG tự kẹp `RowVersion` vào `WHERE`** — nó không đi qua Change
+  Tracker nên không biết gì về concurrency token. Quên viết tay là Optimistic Concurrency
+  biến mất trong im lặng, `dotnet build` sạch, mọi test cũ vẫn xanh.
+- `ExecuteUpdate` cũng **chạy ngay lập tức**, ngoài `SaveChanges` và ngoài mọi transaction
+  chưa mở tường minh, và **không cập nhật entity đang được theo dõi** — hai nguồn "code
+  đọc lên giá trị cũ" rất khó tìm.
+- Dapper multi-exec (`ExecuteAsync(sql, danhSach)`) trả về **tổng** số dòng bị ảnh hưởng.
+  19/20 nghĩa là có một dòng hỏng, nhưng **không biết dòng nào** — mà thông báo hữu ích
+  cho người dùng bắt buộc phải nêu tên sản phẩm. Muốn biết thì phải bỏ multi-exec và
+  quay lại vòng lặp, tức mất đúng lý do đã chọn Dapper.
+- Dùng Dapper ở đây còn phải tự nối `DbConnection` + `DbTransaction` của `DbContext` để
+  hai bên chung một transaction. Quy ước dự án: **Dapper cho truy vấn ĐỌC phức tạp**,
+  không cho đường ghi đã có EF lo.
+
+### Tính chất quyết định: dòng không sửa thì không sinh UPDATE
+Gán một property bằng đúng giá trị đang có **không** đánh dấu `Modified` (EF so với
+`OriginalValue`). Hệ quả trên màn hình 20 dòng: sửa 1 dòng thì chỉ 1 dòng đó cần "còn
+nguyên vẹn". Người khác đổi **tên** một sản phẩm khác trên cùng trang không làm hỏng lần
+lưu, dù `RowVersion` của dòng đó đã đổi. Với (a) và (b) thì mọi dòng đều bị UPDATE nên
+dòng không ai chạm vào cũng đủ sức chặn cả lần lưu — có test riêng khoá điều này
+(`Dong_KHONG_sua_gi_thi_phien_ban_cu_van_luu_duoc`).
+
+### Thành công một phần — CÓ CHỦ Ý, và khác hẳn CheckoutAsync
+Dòng nào lệch `RowVersion` thì bị **bỏ qua** và báo lại; các dòng còn lại **vẫn được
+ghi**. Đây là quyết định **nghiệp vụ**, không phải chi tiết kỹ thuật, và nó ngược với
+`CheckoutAsync` trên cùng một cơ chế `RowVersion`:
+
+| | Đặt hàng | Sửa hàng loạt |
+|---|---|---|
+| Người dùng | Khách, đã rời màn hình | Admin, đang nhìn màn hình |
+| Nửa vời nghĩa là | Khách trả tiền cho đơn không đúng thứ họ đặt | "18 dòng đã lưu, 2 dòng cần xem lại" |
+| Kết luận | **Huỷ cả đơn** | **Giữ 18, báo 2** |
+
+⚠ Đừng "sửa cho nhất quán" theo bất kỳ chiều nào. Hai câu trả lời khác nhau vì hai câu
+hỏi khác nhau.
+
+### Ba lớp, mỗi lớp bịt một cửa sổ khác nhau — bỏ lớp nào cũng sai
+| Lớp | Điều kiện | Bịt cửa sổ | Cho ra |
+|---|---|---|---|
+| 0 | `Price` và `Stock` gửi lên **bằng** giá trị trong DB | — | Không ghi, và **không báo xung đột** |
+| 1 | `RowVersion` gửi lên **khác** `RowVersion` vừa đọc | rộng (vài phút bảng mở) | Bỏ qua **chọn lọc** dòng đó, biết tên + giá trị hiện tại |
+| 2 | `SetExpectedRowVersion` → `WHERE RowVersion = @original` | hẹp (đọc → ghi, vài ms) | Bảo đảm thật |
+
+- **Lớp 0 không phải tối ưu, nó là ĐÚNG/SAI.** Bảng chỉ có hai ô Giá và Tồn kho, nên
+  người khác đổi **tên** một sản phẩm làm `RowVersion` dòng đó nhảy trong khi không có
+  gì ta định ghi bị ảnh hưởng. Thiếu lớp 0 thì Admin mở bảng, không sửa gì, bấm Lưu, và
+  nhận một danh sách "xung đột" toàn dòng họ chưa từng chạm vào — cách nhanh nhất để dạy
+  người dùng bỏ qua thông báo.
+- **Lớp 1 một mình là TOCTOU** — đúng thứ `data-access.md` cấm. Nó chỉ là "đường đẹp".
+- **Lớp 2 một mình không bỏ qua chọn lọc được**: EF ném cho cả batch, không cứu được 18
+  dòng còn lại. Nó là "sự thật", không phải "thông báo tử tế".
+- ⚠ **Ở nhánh lớp 1 TUYỆT ĐỐI không chạm entity.** Gán `Price`/`Stock` rồi mới `continue`
+  là EF vẫn sinh câu UPDATE cho nó, câu đó khớp 0 dòng, và **cả batch bị revert** — tức
+  quay về đúng all-or-nothing mà yêu cầu này muốn bỏ. Không có gì trong thông báo tố
+  giác điều đó: người dùng vẫn thấy "đã lưu 1 sản phẩm" trong khi không dòng nào được ghi.
+
+### Trường hợp hiếm vẫn là tất-cả-hoặc-không-gì-cả
+Nếu ai đó ghi đúng vào **cửa sổ hẹp** thì lớp 2 nổ ở `SaveChanges` và cả batch bị bỏ.
+Không tự thử lại: thử lại sạch sẽ đòi một `DbContext` mới nên không làm được trong cùng
+request (cùng lý do đã hoãn retry cho đua tạo giỏ hàng lần đầu). Controller nói rõ
+"không có thay đổi nào được ghi, bấm Lưu lần nữa".
+
+### Vẫn KHÔNG mở transaction tường minh
+Vẫn **có** transaction — EF tự bọc mỗi `SaveChanges`. Cái đổi là **đơn vị nguyên tử**:
+nó bao "các dòng sống sót sau lớp 0 và lớp 1", không phải "mọi dòng người dùng gửi lên".
+Đó chính là ngữ nghĩa được yêu cầu. Dòng bị bỏ qua không nằm trong đó vì nó không sinh
+lệnh ghi nào.
+
+### Controller phải nạp `RowVersion` mới cho TOÀN BẢNG, không chỉ dòng vướng
+Đây là điểm dễ sai nhất của việc cho phép thành công một phần: **dòng vừa lưu XONG cũng
+đã có phiên bản mới**. Giữ phiên bản cũ cho chúng thì lần bấm Lưu tiếp theo báo xung đột
+ở đúng những dòng mà chính người dùng vừa ghi thành công — một vòng lặp không lối ra và
+rất khó hiểu. Đã mutation test: chỉ nạp cho dòng vướng → 1 đỏ.
+
+Thông báo phải nói đủ **ba** điều: bao nhiêu dòng ĐÃ lưu (thiếu là Admin tưởng cả lần
+bấm Lưu vô ích và bấm lại), dòng nào bị bỏ qua + người kia đã đổi thành **giá trị gì**,
+và làm gì tiếp.
+
+### Hai bẫy im lặng riêng của đường bulk
+- **Ghép item với entity theo VỊ TRÍ** thay vì theo `Id`: giá của sản phẩm này rơi vào
+  sản phẩm khác, và cả hai vẫn là số hợp lệ nên không có gì tố giác. Test phải cố ý
+  **đảo thứ tự** danh sách gửi vào so với thứ tự repository trả về.
+- **Hai dòng cùng `Id`** trong một lần gọi: identity map cho ra MỘT object nên dòng sau
+  đè dòng trước, không exception nào, và người dùng thấy "đã cập nhật 2 sản phẩm".
+  Service phải chặn tường minh.
+
+### Bài học mutation
+| Mutation | Kết quả |
+|---|---|
+| Bỏ chặn `Id` trùng | 1 đỏ |
+| Ghép theo vị trí thay vì theo `Id` | 1 đỏ (chỉ unit test — integration không bắt được vì DB trả về đúng thứ tự) |
+| **Chạm entity rồi mới `continue`** ở nhánh xung đột | **4 đỏ** |
+| Bỏ lớp 0 (dòng không sửa cũng bị coi là xung đột) | 1 đỏ |
+| Bỏ lớp 2 (`SetExpectedRowVersion`) | **1 đỏ, và CHỈ unit test** — xem cảnh báo dưới |
+| Controller chỉ nạp `RowVersion` mới cho dòng vướng | 1 đỏ |
+| Controller không nạp lại `Name` (`[BindNever]`) | 2 đỏ |
+| Controller redirect thay vì render lại khi ModelState hỏng | 1 đỏ |
+| `SaveChanges` **trong vòng lặp** (bản all-or-nothing trước đó) | 5 đỏ |
+
+⚠ **Lớp 2 gần như vô hình với test hành vi.** Bỏ `SetExpectedRowVersion` đi thì mọi
+integration test trên SQL Server thật vẫn xanh — cửa sổ hẹp quá nhỏ để test nào chạm
+tới. Chỉ **unit test với Moq** (`Verify(SetExpectedRowVersion, ...)`) bắt được. Cùng
+hình dạng với bài học ở `payments.md`: an toàn thật nằm ở chỗ không test hành vi nào
+với tới, nên phải có test khẳng định thẳng vào **cơ chế**.
+
+⚠ Bài học đắt nhất (từ bản all-or-nothing, vẫn đúng): bản đầu của test tính nguyên tử
+xếp **dòng hỏng ĐỨNG TRƯỚC** dòng tốt, và mutation "`SaveChanges` trong vòng lặp" **vẫn
+xanh** — dòng hỏng ném ngay vòng đầu nên dòng tốt chưa kịp ghi, tức đúng kết quả mà code
+đúng cho ra. Chỉ khi **dòng tốt đi trước** thì mutation mới để lại dấu vết. Với code
+đúng thì thứ tự không quan trọng chút nào (EF sắp lại theo khoá chính); nó chỉ quan
+trọng với phiên bản sai — và đó chính là việc của test.

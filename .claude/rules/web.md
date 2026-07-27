@@ -54,6 +54,70 @@
 - Bộ lọc "vô lý nhưng hợp lệ" (VD `minPrice > maxPrice`) phải **cảnh báo**, không im
   lặng trả về rỗng: SQL đúng nhưng người dùng sẽ tưởng shop hết hàng.
 
+## Form đặt hàng (`/Checkout`) — ViewModel lai và đường render lỗi
+
+`CheckoutViewModel` vừa là model để RENDER (chứa `CartView`) vừa là tham số của action
+POST. Type lai như vậy tiện nhưng có hai ràng buộc bắt buộc:
+
+- Property chỉ-đi-ra như `Cart` phải có **`[BindNever]`** (+ `[ValidateNever]`). Thiếu nó
+  thì model binder sẵn sàng nhận `Cart.Lines[0].UnitPrice=1` từ form. Hôm nay chưa gây hại
+  vì `CheckoutAsync` đọc giỏ từ DB — nhưng đó là an toàn nhờ THỨ TỰ ĐỌC, không phải nhờ
+  cấu trúc. Đã mutation test: gỡ `[BindNever]` thì **test hành vi vẫn xanh, chỉ test cấu
+  trúc (reflection) đỏ**. Cùng bài học với test cấu trúc chống IDOR ở `cart.md`.
+- Hệ quả bắt buộc nhớ: sau model binding, property `[BindNever]` **rỗng**. Đường render lại
+  form phải tự nạp lại nó — đúng khuôn "ModelState hỏng thì nhớ nạp lại dropdown".
+
+**POST đặt hàng thất bại thì RENDER LẠI form, không redirect.** Đây là thay đổi so với quy
+ước cũ, và lý do đổi là form địa chỉ vừa xuất hiện: redirect vứt sạch dữ liệu người dùng vừa
+gõ, nên họ mất địa chỉ chỉ vì có người khác mua trước — lỗi không phải của họ. PRG **vẫn giữ
+nguyên cho nhánh THÀNH CÔNG** (nơi F5 tạo đơn trùng); gửi lại một POST đã thất bại không tạo
+ra đơn thứ hai nào. Ngoại lệ duy nhất còn redirect là **giỏ rỗng** — không còn gì để render.
+
+⚠ Bẫy test đã suýt lọt: test "render lại thì vẫn thấy giỏ hàng" khẳng định HTML chứa tên sản
+phẩm và tổng tiền. Khi bỏ bước nạp lại `Cart`, controller tưởng giỏ đã hết nên redirect sang
+`/Cart` — mà trang đó đọc giỏ THẬT từ DB nên vẫn in đúng tên và tổng tiền, và test **vẫn
+xanh**. Phải thêm assertion "vẫn đang ở đúng trang" (`action="/Checkout/Confirm"`) mới bắt
+được. Khẳng định nội dung là chưa đủ khi trang khác cũng in ra nội dung đó.
+
+- Ô **số điện thoại** dùng `type="tel"`, KHÔNG `type="number"`. Số điện thoại không phải một
+  con số: `type="number"` làm mất số 0 đứng đầu và chặn dấu `+` của mã quốc gia. Tiêu chí là
+  "giá trị có phải số để TÍNH TOÁN không", không phải "chuỗi có toàn chữ số không" — đây
+  chính là mặt trái của quy tắc `type="number"` cho ô giá ở form lọc.
+- Regex số điện thoại cố ý **dễ dãi**. Đầu số mới được cấp thêm theo thời gian, và regex chặt
+  âm thầm từ chối khách hàng thật — hỏng theo hướng đắt hơn nhiều so với việc lọt một chuỗi
+  vô nghĩa mà nhân viên giao hàng phát hiện ngay. Cùng lý do với việc mật khẩu không đòi ký
+  tự đặc biệt.
+- Địa chỉ là MỘT ô tự do, không tách tỉnh/huyện/xã: tách đúng đòi dữ liệu hành chính thật kèm
+  dropdown phụ thuộc nhau, mà danh mục đó còn đổi theo các đợt sáp nhập.
+
+## Bảng sửa hàng loạt — đặt tên input và đánh dấu dòng hỏng
+
+- Chỉ số `Items[i]` phải **liên tục từ 0**. Binder đọc `Items[0]`, `Items[1]`… và **dừng
+  ở chỉ số đầu tiên thiếu**, âm thầm bỏ toàn bộ phần còn lại. Vì vậy dùng `for` với chỉ
+  số, KHÔNG `foreach` (sinh `name="Price"` không chỉ số, mọi dòng trùng tên), và tuyệt
+  đối không lấy `Id` làm chỉ số.
+- ⚠ **Hệ quả bị bỏ sót nhiều nhất: TUYỆT ĐỐI không `disabled` ô nhập của dòng đang
+  hỏng.** Nghe rất hợp lý ("dòng này conflict, khoá lại"), nhưng trình duyệt **không
+  gửi** input `disabled` → chỉ số đứt quãng → binder bỏ mọi dòng phía sau → người dùng
+  nhận redirect "đã lưu" trong khi nửa bảng chưa từng tới server. Muốn khoá thì dùng
+  `readonly` (vẫn được gửi). Có test hành vi khoá điều này
+  (`Chi_so_DUT_QUANG_thi_binder_am_tham_bo_phan_con_lai`) — nó kiểm một hành vi của
+  framework chứ không phải code dự án, và đó chính là lý do nó đáng tồn tại: nó biến một
+  lời dặn trong comment thành điều đo được.
+- `RowVersion` render Base64 **thủ công**, mỗi dòng một giá trị. Xem `concurrency.md`.
+- Kết quả xung đột phải hiện **ngay trên dòng**, không chỉ trong một câu ở đầu trang:
+  bảng 20 dòng mà thông báo chỉ nêu tên thì Admin phải đối chiếu bằng mắt giữa một đoạn
+  văn và 20 dòng — việc máy làm được còn người thì làm sai. Dòng mang theo **giá trị
+  hiện tại của người kia**, vì "có xung đột" một mình không trả lời được câu hỏi nào.
+- Bị **sửa** và bị **xoá** phải trông KHÁC nhau (`table-warning` vs `table-danger`): hai
+  tình huống đòi hai hành động khác nhau — một cái bấm Lưu lần nữa là xong, một cái bấm
+  bao nhiêu lần cũng vô ích, phải tải lại trang. Dùng chung một màu là nói với người
+  dùng rằng chúng giống nhau.
+- Không hiện "Hiện tại: 0 đ / tồn kho 0" cho sản phẩm đã bị xoá — đó là in ra hai con số
+  bịa như thể chúng là sự thật.
+- Test về "dòng nào được đánh dấu" phải bóc **đúng thẻ `<tr>` đó** rồi mới assert.
+  `html.Contains("table-warning")` vẫn xanh y hệt khi code tô nhầm cả bảng.
+
 ## Định dạng số ở tầng hiển thị
 - Dùng `MoneyFormat.ToMoneyText()` (`MiniMart.Web/Extensions`) chứ không gọi trực tiếp
   `ToString("N0")`. Helper khoá vào `InvariantCulture` để cùng một số ra cùng một chuỗi
@@ -159,6 +223,46 @@ Hệ quả về markup và test:
   ra từ số item nhận được (`items.length < pageSize` sai khi trang cuối vừa đủ đầy).
 - `fetch()` không tự gửi `__RequestVerificationToken` như form HTML, nên token phải đi
   qua header: `AddAntiforgery(o => o.HeaderName = "RequestVerificationToken")`.
+
+## Xử lý lỗi toàn cục (GlobalExceptionMiddleware)
+
+- **Đăng ký ĐẦU TIÊN** trong pipeline. Middleware là các lớp lồng nhau, và một
+  `try/catch` chỉ bắt được thứ ném ra từ BÊN TRONG nó — đăng ký muộn là mọi exception
+  của `UseRouting`, `UseSession`, `UseRateLimiter`, `UseAuthentication` đều thoát ra ngoài.
+- ⚠ **Đã GỠ `UseExceptionHandler("/Home/Error")`, và phải giữ nguyên như vậy.** Nó nằm
+  bên trong middleware của ta nên nó bắt TRƯỚC. Giữ cả hai thì ở **Production** —
+  môi trường duy nhất nó quan trọng — middleware này không bao giờ chạy, còn ở
+  Development thì lại chạy: thứ được test là thứ không chạy thật. Mutation: 2 đỏ.
+- Middleware **KHÔNG** ánh xạ exception nghiệp vụ (`NotFoundException`,
+  `ConcurrencyConflictException`) sang mã HTTP. Việc đó thuộc về Controller, nơi duy nhất
+  đủ ngữ cảnh để chọn giữa "render lại form giữ dữ liệu người dùng" và "trả 404". Thêm
+  bảng ánh xạ ở đây là tạo chỗ thứ hai cùng quyết định một việc. **Tới được middleware
+  nghĩa là đã có bug**, và câu trả lời đúng cho bug là 500.
+- Thương lượng JSON/HTML cần **HAI** tín hiệu: header `Accept` (dùng `Contains`, không so
+  bằng — trình duyệt gửi cả danh sách kèm q-value) **và** attribute `[JsonErrorResponse]`
+  trên action. Chỉ dựa vào `Accept` là endpoint server-to-server như
+  `/Payment/IpnAction` nhận về trang HTML tiếng Việt, vì máy chủ VNPay không cam kết gửi
+  header nào. Attribute đi cùng action nên không lệch được khi đổi route.
+- `GetEndpoint()` đọc được trong khối `catch` dù middleware đăng ký trước `UseRouting`:
+  thứ tự đăng ký quyết định đường đi VÀO, còn `catch` chạy trên đường đi RA.
+- IPN gặp lỗi chưa xử lý thì trả **500**, cố ý — ta thật sự chưa ghi nhận được thanh
+  toán, nên việc VNPay gửi lại là đúng mong muốn. Giả `RspCode = 00` ở đây là nói dối
+  rằng đã xử lý xong.
+- Bắt riêng `OperationCanceledException` khi `RequestAborted` đã huỷ (khách đóng tab) và
+  log ở mức **Information**. Log Error thì mỗi lần có người bấm Stop là một dòng đỏ, và
+  sự cố thật chìm giữa đám nhiễu.
+- Kiểm `Response.HasStarted` trước khi ghi: response đã bắt đầu gửi thì gán lại status
+  chỉ ném `InvalidOperationException` ngay trong khối `catch` — một lỗi thành hai, và lỗi
+  thứ hai che mất lỗi thứ nhất. Việc đúng là ném lại để kết nối bị ngắt.
+  ⚠ Nhánh này **chưa có test**: dựng một response đã flush dở đòi endpoint tự ghi rồi ném.
+- Trang lỗi HTML **tự chứa**, không đi qua Razor và không dùng `_Layout`: thứ vừa ném có
+  thể chính là layout hoặc một service mà layout cần, và khi đó render qua MVC là ném lần
+  thứ hai bên trong chính trình xử lý lỗi.
+- `HtmlEncode` cả mã truy vết lẫn nội dung exception: thông điệp exception thường chứa
+  dữ liệu người dùng nhập, ghép thẳng vào HTML là mở XSS ở đúng trang không ai nghĩ tới.
+- Production **chỉ** trả mã truy vết, không stack trace. Nhưng cũng **phải có** mã truy
+  vết: giấu sạch thì người dùng gọi hỗ trợ mà không nói được gì, còn ta không tra được
+  log của đúng request đó.
 
 ## Layout
 - Khu vực quản trị dùng `Areas/Admin/Views/Shared/_AdminLayout.cshtml`, khai báo trong

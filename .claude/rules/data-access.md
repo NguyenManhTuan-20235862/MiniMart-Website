@@ -12,9 +12,29 @@ Tiêu chí phân loại, không phải cảm tính:
   trong đó buộc phải `.GetAwaiter().GetResult()`, gây thread-pool starvation.
 - Ví dụ đã áp dụng: `CategoryId` có `[Range(1, ...)]` để hỏi "đã chọn chưa", còn
   "danh mục đó có tồn tại không" nằm ở `ProductService.BaoDamDanhMucTonTaiAsync`.
-- Cột tiền tệ: dùng `[Range(typeof(decimal), "0.01", "...", ConvertValueInInvariantCulture = true)]`.
-  Overload `Range(0.01, ...)` nhận `double` nên làm tròn nhị phân; thiếu
-  `ConvertValueInInvariantCulture` thì máy locale vi-VN parse `"0.01"` sai.
+- Cột tiền tệ: dùng overload `[Range(typeof(decimal), "0.01", "...")]` — overload
+  `Range(0.01, ...)` nhận `double` nên làm tròn nhị phân trước khi so với `decimal`.
+- **QUY ƯỚC ĐÃ SỬA — trước đây file này ghi SAI.** Phải bật **CẢ HAI** cờ culture, vì
+  chúng chi phối hai việc khác nhau:
+
+  | Cờ | Chi phối |
+  |---|---|
+  | `ParseLimitsInInvariantCulture` | parse hai chuỗi **CẬN** (`"0.01"`, `"999999999"`) |
+  | `ConvertValueInInvariantCulture` | chuyển đổi **GIÁ TRỊ** đang được kiểm |
+
+  Bản cũ chỉ đặt `ConvertValueInInvariantCulture`, nên hai chuỗi cận vẫn được parse theo
+  `CurrentCulture`. **Đã đo trực tiếp dưới vi-VN**: chỉ `ConvertValue` → `IsValid` **ném
+  `ArgumentException`** (không phải "parse ra số khác" như tài liệu cũ mô tả), tức form
+  Admin trả **HTTP 500** trên máy vi-VN; chỉ `ParseLimits` → chạy đúng. Ba nơi đã bị:
+  `ProductFormViewModel.Price`, `ProductFilter.MinPrice/MaxPrice`,
+  `ProductBulkUpdateDto.Price` — đã vá cả ba.
+- Có `[Theory]` liệt kê **mọi** cột tiền khẳng định cả hai cờ; thêm cột tiền mới thì
+  thêm một dòng vào đó.
+- ⚠ Khi viết test cho việc này: `RangeAttribute` **cache** phép chuyển đổi chuỗi→số ở
+  lần `IsValid` **đầu tiên**. Test ép `CurrentCulture` rồi gọi `Validator.TryValidateObject`
+  sẽ **xanh giả** nếu một test khác trong cùng tiến trình đã chạy trước dưới culture khác.
+  Phải lấy **instance mới** của attribute rồi mới gọi `IsValid`, hoặc tốt hơn là khẳng
+  định thẳng vào thuộc tính cờ.
 - Ràng buộc liên quan HAI thuộc tính (`minPrice > maxPrice`) dùng `IValidatableObject`,
   không phải attribute trên một property. Nó chạy SAU khi từng property đã hợp lệ nên
   không phải kiểm tra null hay kiểu dữ liệu lại.
@@ -112,6 +132,67 @@ Tiêu chí là **dữ liệu tạm hay bản ghi lịch sử**, không phải "c
 - Đã mutation test: **bỏ lệnh kiểm ở Service thì không test nào đỏ** — vì nhánh dịch 547 tạo
   ra ĐÚNG cùng một exception. Đó là tính chất tốt, không phải lỗ hổng test: lệnh kiểm là
   đường đẹp, khoá ngoại mới là thứ bảo đảm.
+
+## Vòng đời connection: vì sao EF Core không cần lo, còn Dapper thì có
+
+**Trạng thái hiện tại (đã rà soát): dự án CHƯA dùng Dapper ở đâu cả.** Package được khai
+báo sẵn ở `Directory.Packages.props` + `MiniMart.Infrastructure.csproj` nhưng không một
+file `.cs` nào `using Dapper`. Mục này viết trước để câu Dapper ĐẦU TIÊN không phải câu
+đi tìm quy ước.
+
+### EF Core — không phải "DI dọn hộ", mà là hai cơ chế chồng lên nhau
+1. **EF tự mở và đóng connection quanh TỪNG câu lệnh.** `DbContext` không giữ connection
+   mở suốt scope; nó mở trước khi chạy lệnh và đóng ngay sau, trừ khi có transaction
+   tường minh đang mở hoặc ai đó tự gọi `OpenAsync()`.
+2. **`DbContext` đăng ký Scoped**, mà DI container theo dõi mọi service Scoped implement
+   `IDisposable` và gọi `DisposeAsync` khi scope kết thúc (cuối request). Nên kể cả khi
+   còn thứ gì đang mở, nó vẫn được trả lại.
+
+Vì vậy `using` quanh `DbContext` là **sai** trong code ứng dụng: nó dispose một object mà
+container vẫn đang sở hữu và sẽ dispose lần nữa. Trong test thì `scope.Dispose()` mới là
+ranh giới đúng.
+
+### Dapper — không có cơ chế nào trong hai cơ chế trên
+Dapper là **extension method trên `IDbConnection`**. Nó không tạo connection, không sở
+hữu connection, không biết DI tồn tại. Toàn bộ vòng đời là việc của người gọi:
+
+```csharp
+await using var connection = new SqlConnection(_chuoiKetNoi);   // TA tạo -> TA dispose
+var rows = await connection.QueryAsync<Row>(sql, thamSo);
+```
+
+- `await using` chứ không `using`: `SqlConnection` có `DisposeAsync`, và bản đồng bộ chặn
+  luồng khi trả connection về pool.
+- **Không `Open()` thủ công** — Dapper tự mở nếu connection đang đóng, và tự đóng lại đúng
+  trạng thái ban đầu.
+
+### Hỏng thế nào nếu quên
+`Dispose()` **không** đóng kết nối TCP — nó **trả connection về pool**. Quên dispose là
+connection bị giữ vĩnh viễn ngoài pool. Pool mặc định 100; khi cạn thì request tiếp theo
+chờ 30 giây rồi ném:
+
+> `Timeout expired. The timeout period elapsed prior to obtaining a connection from the pool.`
+
+Lỗi nổ ở **một truy vấn chẳng liên quan gì** tới chỗ rò rỉ, và **chỉ xuất hiện dưới tải** —
+nên nó qua được toàn bộ test và mọi lần thử tay. Cùng họ với các bẫy im lặng khác của dự án.
+
+### ⚠ Ngoại lệ: connection MƯỢN của EF thì TUYỆT ĐỐI không dispose
+Khi cần Dapper chạy **chung transaction** với EF (xem `concurrency.md`):
+
+```csharp
+var connection = _context.Database.GetDbConnection();      // MƯỢN - KHÔNG using
+var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+var rows = await connection.QueryAsync<Row>(sql, thamSo, transaction);
+```
+
+Bọc `using` ở đây là đóng connection của chính `DbContext` giữa chừng: mọi lệnh EF sau đó
+trong cùng request đổ, và transaction đang mở bị huỷ. Quy tắc không phải "luôn `using`" mà
+là **dispose thứ mình TẠO RA, không dispose thứ mình MƯỢN**.
+
+### Vẫn giữ nguyên phân công
+Dapper dành cho **truy vấn ĐỌC phức tạp**; đường ghi đã có EF lo (Change Tracker tự kẹp
+`RowVersion` vào `WHERE`, tự sắp thứ tự chống deadlock, tự batch). Xem bảng so sánh ba
+cách ở `concurrency.md`.
 
 ## Đăng ký DI
 - Không viết `AddScoped` rời rạc trong `Program.cs`. Dùng extension method

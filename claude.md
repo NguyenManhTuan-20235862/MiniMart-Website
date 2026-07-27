@@ -39,6 +39,7 @@ trong một vùng mà chưa đọc file của vùng đó là gần như chắc c
 | Giỏ hàng, hoặc luồng đăng nhập (nó gộp giỏ) | `.claude/rules/cart.md` |
 | Luồng Edit của Product, UnitOfWork, bất cứ gì chạm RowVersion | `.claude/rules/concurrency.md` |
 | AccountController, cấu hình cookie/authorization, UserService | `.claude/rules/auth.md` |
+| VNPay, chữ ký, `IVnPayService`, `VnPayOptions` | `.claude/rules/payments.md` |
 | Bất kỳ test nào | `.claude/rules/testing.md` |
 | .editorconfig, Directory.Packages.props, .csproj, CI | `.claude/rules/build.md` |
 
@@ -53,20 +54,24 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 | Viết thế này | Chuyện xảy ra |
 |---|---|
 | `ToString("N0")` thay `MoneyFormat.ToMoneyText()` | Máy en-US in `111,000`, máy vi-VN in `111.000` |
-| `asp-for` cho `byte[] RowVersion` | Render ra `"System.Byte[]"`, concurrency biến mất |
+| `asp-for` cho `byte[] RowVersion` **thiếu `type="hidden"`** | Render ra `"System.Byte[]"`, concurrency biến mất (có `type="hidden"` thì lại đúng — đã đo) |
+| Server sửa một giá trị mà quên `ModelState.Remove` | `asp-for` vẫn render giá trị BẬY của người dùng |
 | `SetExpectedRowVersion` ghi `CurrentValue` | Không phát hiện xung đột, lost update |
 | Thiếu `enctype="multipart/form-data"` | `IFormFile` luôn null |
 | `PartialView` → `View` | Response kèm cả layout, trang lồng trong trang |
 | Chuỗi tự chế thay `ClaimTypes.Role` | `IsInRole` và `[Authorize(Roles=…)]` luôn false |
 | `new ClaimsIdentity(claims)` thiếu tham số 2 | `IsAuthenticated` = false dù đủ claims |
 | `UseRateLimiter()` trước `UseRouting()` | Không giới hạn gì cả |
+| Giữ `UseExceptionHandler` **cùng** `GlobalExceptionMiddleware` | Lớp trong bắt trước → middleware tự viết không chạy ở Production, nhưng vẫn chạy ở Development: thứ được test không phải thứ chạy thật |
 | Thiếu `HttpContext.User = principal` sau `SignInAsync` | `ICurrentUser.Id` null → giỏ hàng đổ |
 | `type="text"` cho ô số ở form lọc | vi-VN gõ `1.000.000` → bind thành `null` |
 | `Skip`/`Take` không có tie-breaker trong `OrderBy` | Bản ghi trùng/mất giữa hai trang |
 | Sai tên layout trong `_ViewStart` | Build qua, nổ khi mở trang |
 | `Task.WhenAll` nhiều `await` dùng chung `DbContext` | "A second operation was started" |
 | Factory chọn nhầm kho giỏ hàng | Giỏ vẫn chạy, chỉ là mất dữ liệu |
-| Thiếu `ConvertValueInInvariantCulture` ở `[Range]` tiền | Máy vi-VN parse `"0.01"` sai |
+| Thiếu **`ParseLimitsInInvariantCulture`** ở `[Range]` tiền | Máy vi-VN **ném ArgumentException** → HTTP 500 (`ConvertValueInInvariantCulture` KHÔNG đủ) |
+| Đặt tên input list bằng `foreach` hoặc dùng Id làm chỉ số | Binder dừng ở chỗ đứt quãng, âm thầm bỏ hết dòng còn lại |
+| `disabled` ô nhập của dòng đang hỏng trong bảng sửa hàng loạt | Trình duyệt KHÔNG gửi input disabled → chỉ số đứt quãng → binder bỏ mọi dòng sau, mà response vẫn báo "đã lưu". Dùng `readonly` |
 | Đổi tên một `data-*` mà JS đang `querySelector` | `null` → JS ngừng chạy, không lỗi nào |
 | Bọc node JS cần cập nhật trong `@if` | Lần đầu cần cập nhật thì không có node |
 | Xét nhánh PartialView trước nhánh JSON | Client nhận HTML, `response.json()` ném |
@@ -75,11 +80,39 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 | Nhận `userId` từ form thay vì `ICurrentUser` | IDOR: đặt đơn / đọc đơn dưới tên người khác |
 | Quên `builder.Ignore()` cho property tính toán | Migration sinh cột không bao giờ được ghi |
 | Đọc lại `product.Price` khi tính tổng đơn | Tổng đơn lệch khỏi tổng các dòng |
+| `type="number"` cho ô số điện thoại | Mất số `0` đứng đầu, chặn luôn dấu `+` |
+| Quên nạp lại property `[BindNever]` khi render lại form | Trang hiện ra rỗng, không lỗi nào |
+| Địa chỉ giao hàng trỏ FK sang bảng `Addresses` | Sửa sổ địa chỉ là đơn CŨ đổi theo |
+| Thêm `VnPay:HashSecret` vào `appsettings.json` | App chạy **tốt hơn**, test xanh, bí mật vào Git vĩnh viễn |
+| Bind Options mà quên `.ValidateOnStart()` | Options tạo lười → cấu hình sai lộ ra ở request thanh toán đầu tiên |
+| Ghép chuỗi-để-ký và query string bằng **hai** đoạn code | `%20` vs `+` → VNPay từ chối, log hai bên trông y hệt nhau |
+| `vnp_Amount` để `decimal` thay vì ép `long` | Máy vi-VN in `125000000,00` — máy dev en-US không tái hiện |
+| `vnp_CreateDate` gửi giờ UTC | Lệch 7 tiếng → VNPay coi lệnh đã hết hạn |
+| Ghi nhận thanh toán ở **Return URL** thay vì IPN | Khách đóng tab = tiền đã trừ mà đơn vĩnh viễn "chưa trả" |
+| Đọc `vnp_ResponseCode` trước khi kiểm `vnp_SecureHash` | Tin dữ liệu chưa xác thực — ai cũng tự gõ được `?vnp_ResponseCode=00` |
+| Bỏ đối chiếu `vnp_Amount` vì "chữ ký đã hợp lệ rồi" | Đơn 10 triệu được đánh dấu đã trả bằng 10 nghìn |
+| Trả mã lỗi IPN cho một giao dịch **thất bại** | VNPay tưởng ta chưa nhận được → gửi lại mãi |
+| `defaultValue: ""` mà EF sinh cho cột enum-as-string | Dòng cũ mang giá trị không hợp lệ, nổ lúc đọc lên |
+| `ExecuteUpdate` cho đường ghi có `RowVersion` | Nó KHÔNG đi qua Change Tracker nên **không tự kẹp** token vào `WHERE` — Optimistic Concurrency biến mất, build sạch |
+| Dapper multi-exec để cập nhật nhiều dòng | Chỉ trả **tổng** số dòng — biết có dòng hỏng mà không biết dòng nào, nên không nêu được tên sản phẩm |
+| Quên `using` cho `SqlConnection` tự tạo (Dapper) | Connection không về pool → cạn pool → **`Timeout expired`** ở một truy vấn chẳng liên quan, và **chỉ dưới tải** |
+| `using` cho connection **MƯỢN** từ `_context.Database.GetDbConnection()` | Đóng connection của chính `DbContext` giữa chừng → mọi lệnh EF sau đó đổ, transaction đang mở bị huỷ |
+| Ghép dòng form với entity theo **vị trí** thay vì theo `Id` | Giá của sản phẩm này rơi vào sản phẩm khác; cả hai vẫn là số hợp lệ |
+| Ở nhánh "bỏ qua dòng xung đột" mà vẫn gán `Price`/`Stock` trước khi `continue` | EF vẫn sinh UPDATE → khớp 0 dòng → **cả batch revert**, trong khi thông báo vẫn nói "đã lưu 1 sản phẩm" |
+| Sau khi lưu THÀNH CÔNG MỘT PHẦN, chỉ nạp `RowVersion` mới cho dòng vướng | Lần Lưu sau báo xung đột ở đúng những dòng người dùng vừa ghi thành công |
+| Hai dòng cùng `Id` trong một lần cập nhật hàng loạt | Identity map cho ra MỘT object → dòng sau đè dòng trước, báo "đã cập nhật 2 sản phẩm" |
+| Server sửa giá trị của một tham số action (kẹp `page`) mà quên `ModelState.Remove` | `asp-for` render lại giá trị THÔ, và lần submit sau gửi lại đúng giá trị bậy đó |
+| Helper đăng nhập trong test chấp nhận **200** | Đăng nhập THẤT BẠI cũng là 200 (render lại form) → test chạy tiếp không cookie, đỏ ở chỗ chẳng liên quan |
+| Test bóc `value="…"` từ HTML mà **không `HtmlDecode`** | Base64 chứa `+` bị render thành `&#x2B;` → POST lại không giải mã được → RowVersion null → **không xung đột nào bị phát hiện**; đỏ NGẪU NHIÊN, trông như flaky hạ tầng |
 
 ## Môi trường
 - .NET SDK 10, SQL Server 2025 Express, instance `SQLEXPRESS`.
 - Connection string ở `appsettings.json`, dùng `Trusted_Connection=True` nên không có
   mật khẩu. Nếu chuyển sang SQL Authentication thì BẮT BUỘC dùng User Secrets.
+- **Bí mật VNPay nằm ở User Secrets**, không ở `appsettings.json`. Máy mới phải chạy:
+  `dotnet user-secrets set "VnPay:TmnCode" "<ma>" --project MiniMart.Web` và tương tự cho
+  `VnPay:HashSecret`. Thiếu là ứng dụng **từ chối khởi động** (`ValidateOnStart`) và mọi
+  integration test đỏ. Xem `.claude/rules/build.md`.
 - `dotnet-ef` cài global.
 - sqlcmd để kiểm tra DB trực tiếp:
   `"C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\180\Tools\Binn\SQLCMD.EXE" -S "localhost\SQLEXPRESS" -E -d MiniMart -C -Q "<sql>"`
@@ -89,6 +122,7 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 - dotnet test
 - dotnet format --verify-no-changes   ← là một dạng test, phải sạch
 - dotnet run --project MiniMart.Web --launch-profile http
+- ./scripts/test-vnpay-ipn.ps1 -OrderId &lt;id&gt; -Reset   ← giả lập VNPay gọi IPN vào app đang chạy
 - dotnet ef migrations add <TenMigration> -p MiniMart.Infrastructure -s MiniMart.Web
 - dotnet ef database update -p MiniMart.Infrastructure -s MiniMart.Web
 
@@ -146,6 +180,29 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
   mutation test xác nhận bỏ nó đi thì cả 5 integration test vẫn xanh. Giữ lại vì nó đúng
   ngay khi có `SaveChanges` thứ hai (bản ghi thanh toán), nhưng **đừng tưởng nó đang bảo vệ
   atomicity hôm nay**.
+- **Địa chỉ giao hàng phải gõ lại mỗi lần đặt.** Chưa có sổ địa chỉ (chọn nhanh từ các lần
+  trước), và cũng chưa tự điền từ đơn gần nhất. Cố ý: `Order` đã snapshot đủ 3 cột nên thêm
+  sổ địa chỉ về sau không phải sửa gì ở luồng đặt hàng — đúng tinh thần hoãn tới lúc cần.
+- **VNPay đã đủ luồng đầu-cuối** (nút Checkout → ký URL → cổng → Return → IPN → `Paid`),
+  nhưng **chưa chạy thật được**: khoá sandbox trong User Secrets vẫn là placeholder, và
+  VNPay không gọi IPN tới `localhost` được (cần ngrok). Còn thiếu: **thanh toán lại**
+  (bị chặn bởi việc `vnp_TxnRef = OrderId` mà VNPay từ chối `TxnRef` đã dùng), **đối
+  soát định kỳ** khi IPN mất hẳn, và `Order` **chưa lưu phương thức thanh toán**. Xem
+  `.claude/rules/payments.md`.
+- **Bộ test có một nguồn flaky chưa xử lý tận gốc.** Mọi client `WebApplicationFactory`
+  có `RemoteIpAddress = null` nên **cả bộ test dùng chung một hạn mức rate limit** của
+  `POST /Account/Login`. Đã gặp 2 test đỏ ngẫu nhiên vì lý do này. Đã giảm nhẹ bằng
+  assertion tự tố giác trong helper đăng nhập, nhưng chưa sửa gốc — cách sạch là cho
+  mỗi test class một partition riêng (VD header `X-Forwarded-For` giả + đọc nó trong
+  limiter), hoặc tắt hẳn rate limit ở môi trường test trừ chính test rate limit.
+- **Sửa hàng loạt vẫn all-or-nothing ở đúng MỘT trường hợp hiếm**: có người ghi vào
+  khoảng vài mili giây giữa lệnh đọc và `SaveChanges`. Xung đột thông thường đã bỏ qua
+  chọn lọc từng dòng. Chưa tự thử lại vì retry sạch đòi một `DbContext` mới — cùng lý do
+  đã hoãn retry cho đua tạo giỏ hàng lần đầu. Xem `.claude/rules/concurrency.md`.
+- **Helper đăng nhập trong test bị chép 4 bản** (`AdminCrudTests`, `ProductBulkEditPageTests`,
+  `ProductBulkUpdateTests`, `ProductConcurrencyTests`). Ngưỡng gộp của dự án là bản thứ ba
+  nên nó đã quá hạn. Ba bản cũ còn chấp nhận **200** là đăng nhập thành công — mà 200 chính
+  là đăng nhập THẤT BẠI; chỉ bản trong `ProductBulkUpdateTests` đã siết thành đúng 302.
 - **Chưa có trang "Đơn hàng của tôi".** Đã có `IOrderService.GetMyOrderAsync` cho một đơn,
   chưa có danh sách. Index `(UserId, CreatedAt DESC)` trên `Orders` đã dựng sẵn cho việc đó.
 - **`Order` chưa có `Status`** — cố ý. Thêm cột trạng thái trước khi biết đơn có những trạng
