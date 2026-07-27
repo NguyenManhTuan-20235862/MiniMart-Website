@@ -3,7 +3,11 @@
     ViewData["Title"] = "Sản phẩm";
 }
 
-<h1 class="h3 mb-4">Sản phẩm</h1>
+@* Tiêu đề trang *@
+<div class="mb-3">
+    <h1 class="es-section-title">Sản phẩm</h1>
+    <p class="es-section-subtitle">Khám phá các thiết bị điện tử chính hãng, giá tốt nhất</p>
+</div>
 
 @*
     Form lọc dùng GET chứ không POST: kết quả lọc phải nằm trong URL để người
@@ -11,51 +15,61 @@
 
     Các input đặt name THỦ CÔNG ("minPrice") thay vì asp-for="Filter.MinPrice":
     asp-for sinh ra name="Filter.MinPrice" và URL biến thành
-    ?Filter.MinPrice=1000 - dài, khó đọc, và lệch với tham số mà
+    ?Filter.MinPrice=1000 — dài, khó đọc, và lệch với tham số mà
     /Product/LoadMore nhận. Đổi lại phải tự đổ value và tự hiện lỗi.
 *@
-<form method="get" asp-action="Index" class="row g-2 align-items-end mb-2">
-    <div class="col-auto">
-        <label for="categoryId" class="form-label">Danh mục</label>
-        <select id="categoryId" name="categoryId" class="form-select">
-            <option value="">-- Tất cả --</option>
-            @foreach (var category in Model.Categories)
+<div class="es-filter-bar">
+    <form method="get" asp-action="Index" class="row g-3 align-items-end">
+        <div class="col-auto">
+            <label for="categoryId" class="form-label">Danh mục</label>
+            <select id="categoryId" name="categoryId" class="form-select" style="min-width:160px;">
+                <option value="">-- Tất cả --</option>
+                @foreach (var category in Model.Categories)
+                {
+                    @* selected giữ lại lựa chọn sau khi trang tải lại. *@
+                    <option value="@category.Id" selected="@(category.Id == Model.Filter.CategoryId)">
+                        @category.Name
+                    </option>
+                }
+            </select>
+        </div>
+
+        @*
+            type="number" chứ không phải type="text": theo chuẩn HTML, giá trị của
+            input number LUÔN được gửi lên ở dạng chuẩn hoá (dấu . làm phần thập
+            phân), không phụ thuộc locale của trình duyệt. Dùng type="text" thì
+            người dùng vi-VN gõ "1.000.000" và model binding trả về null trong im lặng.
+        *@
+        <div class="col-auto">
+            <label for="minPrice" class="form-label">Giá từ (đ)</label>
+            <input type="number" id="minPrice" name="minPrice" class="form-control"
+                   value="@Model.Filter.MinPriceText"
+                   min="0" step="1000" placeholder="0"
+                   style="max-width: 140px;" />
+        </div>
+        <div class="col-auto">
+            <label for="maxPrice" class="form-label">Giá đến (đ)</label>
+            <input type="number" id="maxPrice" name="maxPrice" class="form-control"
+                   value="@Model.Filter.MaxPriceText"
+                   min="0" step="1000" placeholder="Không giới hạn"
+                   style="max-width: 175px;" />
+        </div>
+
+        <div class="col-auto d-flex gap-2 align-items-end">
+            <button type="submit" class="es-btn-filter">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"
+                     style="margin-right:4px;" aria-hidden="true">
+                    <path d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5z"/>
+                </svg>
+                Lọc
+            </button>
+            @if (Model.Filter.HasAnyFilter)
             {
-                @* selected giữ lại lựa chọn sau khi trang tải lại. *@
-                <option value="@category.Id" selected="@(category.Id == Model.Filter.CategoryId)">
-                    @category.Name
-                </option>
+                <a asp-action="Index" class="es-btn-clear">✕ Xoá lọc</a>
             }
-        </select>
-    </div>
-
-    @*
-        type="number" chứ không phải type="text": theo chuẩn HTML, giá trị của
-        input number LUÔN được gửi lên ở dạng chuẩn hoá (dấu . làm phần thập
-        phân), không phụ thuộc locale của trình duyệt. Dùng type="text" thì
-        người dùng vi-VN gõ "1.000.000" và model binding trả về null trong im lặng.
-    *@
-    <div class="col-auto">
-        <label for="minPrice" class="form-label">Giá từ</label>
-        <input type="number" id="minPrice" name="minPrice" class="form-control"
-               value="@Model.Filter.MinPriceText"
-               min="0" step="1000" placeholder="0" style="max-width: 140px;" />
-    </div>
-    <div class="col-auto">
-        <label for="maxPrice" class="form-label">Giá đến</label>
-        <input type="number" id="maxPrice" name="maxPrice" class="form-control"
-               value="@Model.Filter.MaxPriceText"
-               min="0" step="1000" placeholder="Không giới hạn" style="max-width: 180px;" />
-    </div>
-
-    <div class="col-auto">
-        <button type="submit" class="btn btn-primary">Lọc</button>
-        @if (Model.Filter.HasAnyFilter)
-        {
-            <a asp-action="Index" class="btn btn-link">Xoá lọc</a>
-        }
-    </div>
-</form>
+        </div>
+    </form>
+</div>
 
 @*
     Validation summary của framework thay cho @if tự viết: mọi lỗi đến từ
@@ -69,13 +83,18 @@
 
 @if (Model.Products.TotalCount == 0)
 {
-    <div class="alert alert-light border">
-        Không tìm thấy sản phẩm nào@(Model.Filter.HasAnyFilter ? " khớp với bộ lọc" : "").
+    <div class="es-empty-state">
+        <div class="es-empty-state-icon">📦</div>
+        <p>Không tìm thấy sản phẩm nào@(Model.Filter.HasAnyFilter ? " khớp với bộ lọc" : "").</p>
+        @if (Model.Filter.HasAnyFilter)
+        {
+            <a asp-action="Index" class="es-btn-clear mt-3 d-inline-block">✕ Xoá bộ lọc</a>
+        }
     </div>
 }
 else
 {
-    <p class="text-muted small">
+    <p class="es-product-count">
         Hiển thị <span id="shownCount">@Model.Products.Items.Count</span>
         / @Model.Products.TotalCount sản phẩm
     </p>
@@ -89,20 +108,20 @@ else
 
     @if (Model.Products.HasNextPage)
     {
-        <div class="text-center mt-4">
+        <div class="es-load-more-wrap">
             @*
                 Bộ lọc hiện tại được gửi kèm nút qua data-*. Không đọc lại từ
                 các ô input: người dùng có thể sửa ô "Giá từ" mà chưa bấm "Lọc",
-                lúc đó ô input và danh sách đang hiển thị đã lệch nhau - phải
+                lúc đó ô input và danh sách đang hiển thị đã lệch nhau — phải
                 phân trang theo bộ lọc ĐANG hiển thị, không phải theo ô nhập.
             *@
-            <button id="btnLoadMore" type="button" class="btn btn-outline-primary"
+            <button id="btnLoadMore" type="button" class="es-btn-load-more"
                     data-category-id="@Model.Filter.CategoryId"
                     data-min-price="@Model.Filter.MinPriceText"
                     data-max-price="@Model.Filter.MaxPriceText"
                     data-next-page="2"
                     data-url="@Url.Action("LoadMore", "Product")">
-                Xem thêm
+                Xem thêm sản phẩm
             </button>
             <div id="loadMoreError" class="text-danger small mt-2 d-none"></div>
         </div>

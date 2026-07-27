@@ -5,46 +5,65 @@
     trong HTML gửi đi.
 
     Đặt ở Views/Shared để trang Home và các trang sản phẩm sau này dùng chung
-    một khuôn thẻ - đổi giao diện thẻ chỉ phải sửa một chỗ.
+    một khuôn thẻ — đổi giao diện thẻ chỉ phải sửa một chỗ.
 *@
 <div class="col">
     <div class="card h-100 shadow-sm">
-        @if (string.IsNullOrEmpty(Model.ImageUrl))
-        {
-            <div class="bg-light d-flex align-items-center justify-content-center"
-                 style="height: 180px;">
-                <span class="text-muted small">Chưa có ảnh</span>
-            </div>
-        }
-        else
-        {
-            <img src="@Model.ImageUrl" class="card-img-top" alt="@Model.Name"
-                 style="height: 180px; object-fit: contain;" />
-        }
 
-        <div class="card-body d-flex flex-column">
-            <h6 class="card-title">@Model.Name</h6>
-
-            @if (Model.Category is not null)
+        @* Vùng ảnh *@
+        <div class="es-product-img-wrap">
+            @if (string.IsNullOrEmpty(Model.ImageUrl))
             {
-                <p class="card-text text-muted small mb-2">@Model.Category.Name</p>
-            }
-
-            @* ToMoneyText() khoá vào InvariantCulture: cùng một con số ra cùng
-               một chuỗi bất kể locale của máy chạy server. *@
-            <p class="card-text fw-bold text-danger mt-auto mb-1">
-                @Model.Price.ToMoneyText() đ
-            </p>
-
-            @* Chỉ hiện TRẠNG THÁI còn/hết hàng, không hiện con số tồn kho -
-               số lượng hàng tồn là thông tin kinh doanh. *@
-            @if (Model.Stock == 0)
-            {
-                <span class="badge bg-secondary align-self-start">Hết hàng</span>
+                <div class="es-product-img-placeholder">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="3" width="18" height="18" rx="3"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21,15 16,10 5,21"/>
+                    </svg>
+                    <span style="font-size:0.75rem;">Chưa có ảnh</span>
+                </div>
             }
             else
             {
-                <span class="badge bg-success align-self-start mb-2">Còn hàng</span>
+                <img src="@Model.ImageUrl" alt="@Model.Name" />
+            }
+
+            @* Badge danh mục nổi trên ảnh *@
+            @if (Model.Category is not null)
+            {
+                <span class="es-product-cat-badge">@Model.Category.Name</span>
+            }
+        </div>
+
+        @* Body *@
+        <div class="es-product-body">
+            <h6 class="es-product-name">@Model.Name</h6>
+
+            @* ToMoneyText() khoá vào InvariantCulture: cùng một con số ra cùng
+               một chuỗi bất kể locale của máy chạy server. *@
+            <p class="es-product-price">
+                @Model.Price.ToMoneyText()<small> đ</small>
+            </p>
+
+            @* Chỉ hiện TRẠNG THÁI còn/hết hàng, không hiện con số tồn kho —
+               số lượng hàng tồn là thông tin kinh doanh. *@
+            @if (Model.Stock == 0)
+            {
+                <span class="es-badge-out-stock">
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true">
+                        <circle cx="4" cy="4" r="4"/>
+                    </svg>
+                    Hết hàng
+                </span>
+            }
+            else
+            {
+                <span class="es-badge-in-stock">
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true">
+                        <circle cx="4" cy="4" r="4"/>
+                    </svg>
+                    Còn hàng
+                </span>
 
                 @*
                     Vẫn là form POST thường và VẪN chạy khi tắt JavaScript: CartController
@@ -52,13 +71,15 @@
                     helper tự chèn antiforgery token khi có asp-action.
 
                     data-cart-add chỉ là dấu để cart-dropdown.js chặn submit và gửi bằng
-                    fetch. Không có JS thì thuộc tính này vô nghĩa và form submit như cũ -
+                    fetch. Không có JS thì thuộc tính này vô nghĩa và form submit như cũ —
                     đó là progressive enhancement, không phải hai đường code song song.
                 *@
                 <form asp-area="" asp-controller="Cart" asp-action="Add" method="post" data-cart-add>
                     <input type="hidden" name="ProductId" value="@Model.Id" />
                     <input type="hidden" name="Quantity" value="1" />
-                    <button type="submit" class="btn btn-sm btn-primary w-100">Thêm vào giỏ</button>
+                    <button type="submit" class="es-btn-add-cart">
+                        Thêm vào giỏ
+                    </button>
                 </form>
             }
         </div>

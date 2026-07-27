@@ -1,85 +1,98 @@
-﻿@inject MiniMart.Application.Interfaces.ICartService CartService
+@inject MiniMart.Application.Interfaces.ICartService CartService
 @{
-    // Đọc một lần cho cả layout. Đặt trong @{} chứ không gọi trực tiếp trong
-    // markup để tránh gọi hai lần (một lần cho badge, một lần cho dropdown).
+    @* Đọc một lần cho cả layout. Đặt trong @{} chứ không gọi trực tiếp trong
+       markup để tránh gọi hai lần (một lần cho badge, một lần cho dropdown). *@
     var GioHang = await CartService.GetCartAsync();
     var SoMonTrongGio = GioHang.TotalQuantity;
 }
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - MiniMart.Web</title>
+    <title>@ViewData["Title"] — ElectroShop</title>
     <script type="importmap"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/MiniMart.Web.styles.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        <nav class="navbar navbar-expand-md es-navbar">
             <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">MiniMart.Web</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+
+                @* Brand *@
+                <a class="es-brand navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">
+                    <svg class="es-brand-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="nav-lg" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#4f8ef7"/>
+                                <stop offset="100%" stop-color="#00d4ff"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M6 9h4l6 20h18l4-14H14" stroke="url(#nav-lg)" stroke-width="2.5"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="19" cy="34" r="2.5" fill="url(#nav-lg)"/>
+                        <circle cx="31" cy="34" r="2.5" fill="url(#nav-lg)"/>
+                    </svg>
+                    <span class="es-brand-text">ElectroShop</span>
+                </a>
+
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                        data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+
+                <div class="navbar-collapse collapse d-md-inline-flex justify-content-between">
+
+                    @* Nav trái *@
                     <ul class="navbar-nav flex-grow-1">
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+                            <a class="nav-link" asp-area="" asp-controller="Home" asp-action="Index">Sản phẩm</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
-                        @* Ẩn link khỏi menu chỉ là trải nghiệm người dùng, KHÔNG phải
-                           bảo mật - [Authorize] trên controller mới là thứ chặn thật. *@
+                        @* Ẩn link khỏi menu chỉ là UX, KHÔNG phải bảo mật —
+                           [Authorize] trên controller mới là thứ chặn thật. *@
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Profile" asp-action="Index">Tài khoản</a>
+                                <a class="nav-link" asp-area="" asp-controller="Profile" asp-action="Index">Tài khoản</a>
                             </li>
                         }
                         @if (User.IsInRole("Admin"))
                         {
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">Quản trị</a>
+                            <li class="nav-item es-nav-admin">
+                                <a class="nav-link" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">
+                                    ⚙ Quản trị
+                                </a>
                             </li>
                         }
                     </ul>
 
-                    <ul class="navbar-nav">
-                        @*
-                            Badge giỏ hàng. Đọc giỏ ở MỌI trang - đánh đổi đã biết: khách
-                            vãng lai chỉ tốn một lần đọc Session (rẻ), người đã đăng nhập
-                            tốn một truy vấn DB mỗi trang. Đổi lại là số món luôn đúng mà
-                            không cần JavaScript.
-                        *@
+                    @* Nav phải *@
+                    <ul class="navbar-nav align-items-center">
+
+                        @* Giỏ hàng dropdown
+                             Badge LUÔN được render (ẩn khi = 0) thay vì bọc trong @if:
+                             JS cần một node có sẵn để gán textContent. Bọc trong @if thì
+                             lần đầu thêm hàng vào giỏ rỗng sẽ không có node nào để cập nhật. *@
                         <li class="nav-item dropdown">
-                            @*
-                                Icon là nút mở dropdown; link tới trang /Cart đầy đủ nằm ở
-                                cuối dropdown. Không bật data-bs-auto-close="outside" vì bấm
-                                nút +/- bên trong KHÔNG được làm đóng dropdown, mà Bootstrap
-                                mặc định đóng khi click ra ngoài menu - nút của ta nằm trong
-                                menu nên mặc định đã đúng.
-                            *@
-                            <a class="nav-link text-dark position-relative" href="#" role="button"
+                            @* Không bật data-bs-auto-close="outside" vì bấm nút +/- bên trong
+                               KHÔNG được làm đóng dropdown. Bootstrap mặc định đóng khi click
+                               ra ngoài menu — nút ta nằm trong menu nên mặc định đã đúng. *@
+                            <a class="nav-link es-cart-link position-relative" href="#" role="button"
                                id="cartDropdownToggle" data-bs-toggle="dropdown" aria-expanded="false"
                                aria-label="Giỏ hàng">
-                                @* SVG nội tuyến: không thêm bootstrap-icons chỉ để lấy một icon,
-                                   và CSP của dự án không cho tải asset từ host ngoài. *@
+                                @* SVG nội tuyến — không load bootstrap-icons chỉ để lấy 1 icon *@
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
                                      viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                                     <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .485.379L2.89 3H14.5a.5.5 0 0 1 .49.598l-1 5a.5.5 0 0 1-.465.401l-9.397.472L4.415 11H13a.5.5 0 0 1 0 1H4a.5.5 0 0 1-.491-.408L2.01 3.607 1.61 2H.5a.5.5 0 0 1-.5-.5zM5 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-7 1a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
                                 </svg>
                                 Giỏ hàng
-                                @*
-                                    Badge LUÔN được render (ẩn khi = 0) thay vì bọc trong @if:
-                                    JS cần một node có sẵn để gán textContent. Bọc trong @if thì
-                                    lần đầu thêm hàng vào giỏ rỗng sẽ không có node nào để cập
-                                    nhật, và JS buộc phải tự tạo thẻ.
-                                *@
                                 <span class="badge rounded-pill bg-danger" data-cart-count
                                       hidden="@(SoMonTrongGio == 0 ? "hidden" : null)">@SoMonTrongGio</span>
                             </a>
@@ -94,23 +107,29 @@
 
                         @if (User.Identity?.IsAuthenticated == true)
                         {
-                            <li class="nav-item">
-                                <span class="nav-link text-dark">Xin chào, <strong>@User.Identity.Name</strong></span>
+                            <li class="nav-item d-flex align-items-center">
+                                <span class="nav-greeting">
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                        <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.25 10 8 10c-2.25 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+                                    </svg>
+                                    <strong>@User.Identity.Name</strong>
+                                </span>
                             </li>
                             <li class="nav-item">
                                 @* Logout là POST nên phải dùng form, không dùng thẻ <a>. *@
                                 <form asp-area="" asp-controller="Account" asp-action="Logout" method="post">
-                                    <button type="submit" class="btn btn-link nav-link text-dark">Đăng xuất</button>
+                                    <button type="submit" class="btn-logout">Đăng xuất</button>
                                 </form>
                             </li>
                         }
                         else
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Account" asp-action="Login">Đăng nhập</a>
+                                <a class="nav-link" asp-area="" asp-controller="Account" asp-action="Login">Đăng nhập</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Account" asp-action="Register">Đăng ký</a>
+                                <a class="nav-link" asp-area="" asp-controller="Account" asp-action="Register"
+                                   style="color: #4f8ef7 !important; font-weight: 600;">Đăng ký</a>
                             </li>
                         }
                     </ul>
@@ -118,19 +137,33 @@
             </div>
         </nav>
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            <partial name="_StatusMessages" />
 
+    <div class="container es-main-wrapper">
+        <main role="main">
+            <partial name="_StatusMessages" />
             @RenderBody()
         </main>
     </div>
 
-    <footer class="border-top footer text-muted">
+    <footer class="es-footer">
         <div class="container">
-            &copy; 2026 - MiniMart.Web - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+            <div class="es-footer-inner">
+                <div class="es-footer-brand">
+                    <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
+                        <path d="M6 9h4l6 20h18l4-14H14" stroke="#4f8ef7" stroke-width="2.5"
+                              stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="19" cy="34" r="2.5" fill="#4f8ef7"/>
+                        <circle cx="31" cy="34" r="2.5" fill="#4f8ef7"/>
+                    </svg>
+                    <span>&copy; 2026 <strong>ElectroShop</strong> — Công nghệ đỉnh cao, giá tốt nhất</span>
+                </div>
+                <div class="es-footer-links">
+                    <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+                </div>
+            </div>
         </div>
     </footer>
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

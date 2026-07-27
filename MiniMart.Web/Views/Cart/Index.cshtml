@@ -3,10 +3,13 @@
     ViewData["Title"] = "Giỏ hàng";
 }
 
-<h1 class="h3 mb-4">Giỏ hàng</h1>
+<div class="mb-4">
+    <h1 class="es-section-title">Giỏ hàng của bạn</h1>
+    <p class="es-section-subtitle">Quản lý và kiểm tra danh sách sản phẩm trước khi thanh toán</p>
+</div>
 
 @*
-    Toàn bộ bảng nằm trong một container có id, để bước JavaScript sau này chỉ cần
+    Toàn bộ bảng nằm trong một container có id, để bước JavaScript chỉ cần
     thay innerHTML của nó bằng HTML mà /Cart/Add trả về - không phải dựng lại markup.
 *@
 <div id="cartContainer">
