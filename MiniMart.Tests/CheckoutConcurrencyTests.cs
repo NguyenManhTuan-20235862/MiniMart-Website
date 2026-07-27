@@ -195,6 +195,63 @@ public class CheckoutConcurrencyTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Hai_request_dong_thoi_tren_san_pham_CHI_CON_1_thi_dung_MOT_don_thanh_cong()
+    {
+        // Trường hợp tối giản của oversell: 2 người, 1 món. Kết quả xác định TUYỆT ĐỐI
+        // dù hai luồng đan xen kiểu nào, vì chỉ có đúng hai kịch bản:
+        //
+        //   (a) Cả hai cùng đọc Stock = 1 -> cùng qua lệnh kiểm -> cùng trừ về 0 trong
+        //       Change Tracker RIÊNG của mình -> cùng SaveChanges. Một người thắng,
+        //       người kia có RowVersion đã cũ nên UPDATE khớp 0 dòng -> xung đột.
+        //
+        //   (b) Người thứ nhất xong hẳn trước khi người thứ hai kịp đọc -> người thứ
+        //       hai đọc Stock = 0 và dừng ngay ở lệnh kiểm của Service.
+        //
+        // Hai đường khác nhau nhưng CÙNG một kết cục quan sát được: 1 thành công,
+        // 1 nhận InsufficientStockException. Nhờ vậy test không bị nhấp nháy (flaky).
+        await DoiTonKhoAsync(1);
+
+        var userIds = await TaoNguoiMuaAsync(2, soLuongMoiNguoi: 1);
+
+        var ketQua = await Task.WhenAll(userIds.Select(DatHangAsync));
+
+        var thanhCong = ketQua.Where(k => k.ThanhCong).ToList();
+        var thatBai = ketQua.Where(k => !k.ThanhCong).ToList();
+
+        Assert.Single(thanhCong);
+        Assert.Single(thatBai);
+
+        // ★ Assertion QUAN TRỌNG NHẤT của test này, và không phải vì lý do hiển nhiên.
+        //
+        // Nó khẳng định người thua nhận LỖI NGHIỆP VỤ đọc được, không phải exception
+        // thô của tầng dữ liệu (DbUpdateConcurrencyException đã được UnitOfWork dịch
+        // thành ConcurrencyConflictException, rồi OrderService dịch tiếp thành đây).
+        //
+        // Nhưng nó còn canh giữ CHÍNH PHƯƠNG PHÁP của test. Đã đo bằng mutation kép:
+        // tắt concurrency token VÀ cho test dùng chung một DI scope thì hai assertion
+        // Assert.Single ở trên VẪN PASS - vì DbContext không thread-safe nên một luồng
+        // ném InvalidOperationException ("A second operation was started"), cho ra
+        // đúng hình dạng "1 thành công, 1 thất bại" của kết quả đúng.
+        //
+        // Không có dòng này thì test xanh trong khi cả code lẫn test đều hỏng.
+        Assert.IsType<InsufficientStockException>(thatBai[0].Loi);
+        Assert.Contains("cập nhật giỏ hàng", thatBai[0].Loi!.Message);
+
+        // Tồn kho cuối cùng: 0, KHÔNG âm.
+        Assert.Equal(0, await LayTonKhoAsync());
+
+        // Và đúng 1 món được bán ra - đây là câu khẳng định "không oversell".
+        Assert.Equal(1, await TongSoLuongDaBanAsync());
+
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MiniMartDbContext>();
+
+        // Đúng MỘT đơn dưới DB. Nhiều hơn nghĩa là transaction của người thua vẫn để
+        // lại đơn dù tồn kho không trừ được.
+        Assert.Equal(1, await context.Orders.CountAsync(o => _userIds.Contains(o.UserId)));
+    }
+
+    [Fact]
     public async Task Chay_tuan_tu_thi_ban_duoc_dung_het_hang_trong_kho()
     {
         var userIds = await TaoNguoiMuaAsync(8, soLuongMoiNguoi: 1);
@@ -310,6 +367,16 @@ public class CheckoutConcurrencyTests : IAsyncLifetime
         }
 
         return ids;
+    }
+
+    private async Task DoiTonKhoAsync(int stock)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<MiniMartDbContext>();
+
+        await context.Products
+            .Where(p => p.Id == _productId)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.Stock, stock));
     }
 
     private async Task<int> LayTonKhoAsync()

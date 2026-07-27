@@ -17,9 +17,22 @@
 - **Không assert trên chuỗi số ngắn** (`DoesNotContain("77")`) khi dữ liệu test sinh
   ngẫu nhiên: GUID dạng hex có chứa chữ số nên assertion sẽ đỏ ngẫu nhiên. Dùng giá trị
   đủ đặc biệt (7+ chữ số) hoặc assert theo cấu trúc thay vì chuỗi trần.
-- Mô phỏng "hai người dùng" bằng **hai DI scope riêng**, không dùng chung một scope: mỗi
-  scope có một `DbContext` với Change Tracker riêng. Dùng chung thì hai bên nhìn cùng một
-  entity trong bộ nhớ và không xung đột nào xảy ra — test xanh vô nghĩa.
+- Mô phỏng "hai người dùng" bằng **hai DI scope riêng**, không dùng chung một scope. Ba lý
+  do, đều là hệ quả của `DbContext` đăng ký **Scoped** (một request = một scope = một context):
+  - **Identity map**: trong MỘT `DbContext`, mỗi khoá chính chỉ có MỘT object. Đọc sản phẩm
+    hai lần trả về cùng một instance, nên "người mua B" thấy ngay phép trừ của A dù A chưa
+    lưu. Không còn UPDATE nào mang `RowVersion` cũ → không xung đột nào để phát hiện.
+  - **Không thread-safe**: `Task.WhenAll` trên một context ném `InvalidOperationException`
+    ("A second operation was started") — thất bại vì lỗi test, không phải vì nghiệp vụ.
+  - Hai scope mới cho hai kết nối, hai transaction, hai bản `RowVersion` độc lập — đúng
+    hình dạng của hai request thật.
+- ⚠ Điều nguy hiểm là dùng chung scope **không làm test đỏ một cách rõ ràng**. Đã đo:
+  tắt concurrency token + dùng chung scope thì `Assert.Single(thành công)` và
+  `Assert.Single(thất bại)` VẪN PASS, vì crash của `DbContext` cho ra đúng hình dạng
+  "1 thành công, 1 thất bại" của kết quả đúng. Chỉ **assert KIỂU exception** mới bắt được.
+  Vì vậy test concurrency bắt buộc phải khẳng định kiểu exception, không chỉ khẳng định số đếm.
+- `DbContextScopeTests` tồn tại để khoá chính phương pháp này lại: nó chứng minh bằng test
+  rằng cùng scope → cùng `DbContext` → cùng object, còn khác scope → bản sao riêng.
 - Markup có hook `data-*` cho JavaScript: mỗi hook phải có test khẳng định nó còn trong
   HTML (dùng `[Theory]` liệt kê từng cái). Đổi tên hook trong Razor làm JS im lặng ngừng
   chạy — không lỗi build, không lỗi runtime. Khi chưa có Playwright thì đây là cách duy
