@@ -800,7 +800,73 @@ body {
     margin-bottom: 0.25rem;
 }
 
-.es-profile-subtitle {
-    font-size: 0.875rem;
-    color: var(--es-text-muted);
+/* ============================================================
+   ADMIN LAYOUT & DASHBOARD STYLES
+   ============================================================ */
+.es-admin-sidebar {
+    background: var(--es-surface);
+    border-right: 1px solid var(--es-border);
+    min-height: calc(100vh - 64px);
+    padding: 1.25rem 0.75rem;
 }
+
+.es-admin-nav-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--es-text-muted);
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.25rem;
+}
+
+.es-admin-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--es-radius-sm);
+    color: var(--es-text);
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: all var(--es-transition);
+    margin-bottom: 0.25rem;
+}
+
+.es-admin-nav-item:hover {
+    background: rgba(79, 142, 247, 0.08);
+    color: var(--es-blue);
+}
+
+.es-admin-nav-item.active {
+    background: linear-gradient(90deg, rgba(79, 142, 247, 0.15) 0%, rgba(79, 142, 247, 0.05) 100%);
+    color: var(--es-blue-dark);
+    border-left: 3.5px solid var(--es-blue);
+}
+
+.es-admin-stat-card {
+    background: var(--es-surface);
+    border: 1px solid var(--es-border);
+    border-radius: var(--es-radius);
+    padding: 1.5rem;
+    box-shadow: var(--es-shadow);
+    transition: transform var(--es-transition), box-shadow var(--es-transition);
+    height: 100%;
+}
+
+.es-admin-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--es-shadow-hover);
+}
+
+.es-admin-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}

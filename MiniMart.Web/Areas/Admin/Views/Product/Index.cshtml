@@ -3,57 +3,107 @@
     ViewData["Title"] = "Quản lý sản phẩm";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Sản phẩm</h2>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <div>
+        <h1 class="es-section-title">Quản lý sản phẩm</h1>
+        <p class="es-section-subtitle mb-0">Danh sách tất cả các sản phẩm đang có trong hệ thống</p>
+    </div>
     <div class="d-flex gap-2">
-        <a asp-action="BulkEdit" class="btn btn-outline-primary">Sửa giá / tồn kho hàng loạt</a>
-        <a asp-action="Create" class="btn btn-primary">Thêm sản phẩm</a>
+        <a asp-action="BulkEdit" class="btn btn-outline-warning text-dark fw-semibold shadow-sm">
+            ⚡ Sửa giá / tồn kho hàng loạt
+        </a>
+        <a asp-action="Create" class="btn btn-primary fw-semibold shadow-sm">
+            ➕ Thêm sản phẩm
+        </a>
     </div>
 </div>
 
 @if (Model.Count == 0)
 {
-    <p class="text-muted">Chưa có sản phẩm nào. Cần tạo danh mục trước khi thêm sản phẩm.</p>
+    <div class="es-empty-state bg-white rounded-3 border p-5 text-center my-3">
+        <div class="es-empty-state-icon">📦</div>
+        <h4 class="fw-bold mb-2">Chưa có sản phẩm nào</h4>
+        <p class="text-muted mb-4">Cần tạo danh mục trước khi thêm sản phẩm mới vào cửa hàng.</p>
+        <a asp-action="Create" class="btn btn-primary px-4">Thêm sản phẩm</a>
+    </div>
 }
 else
 {
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th style="width: 80px;">Ảnh</th>
-                <th>Tên sản phẩm</th>
-                <th>Danh mục</th>
-                <th class="text-end">Giá</th>
-                <th class="text-end">Tồn kho</th>
-                <th class="text-end">Thao tác</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var product in Model)
-            {
-                <tr>
-                    <td>
-                        @if (string.IsNullOrEmpty(product.ImageUrl))
+    <div class="card es-checkout-card mb-4">
+        <div class="card-header fw-bold es-checkout-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <span class="es-checkout-header-icon">📦</span>
+                Danh sách sản phẩm
+            </div>
+            <span class="badge bg-primary rounded-pill">@Model.Count sản phẩm</span>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table align-middle table-hover mb-0">
+                    <thead class="bg-light">
+                        <tr class="text-muted small">
+                            <th scope="col" style="width: 80px;" class="ps-4">Ảnh</th>
+                            <th scope="col">Tên sản phẩm</th>
+                            <th scope="col">Danh mục</th>
+                            <th scope="col" class="text-end">Giá bán</th>
+                            <th scope="col" class="text-end">Tồn kho</th>
+                            <th scope="col" class="text-end pe-4" style="width: 140px;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var product in Model)
                         {
-                            <span class="text-muted small">—</span>
+                            <tr>
+                                <td class="ps-4">
+                                    @if (string.IsNullOrEmpty(product.ImageUrl))
+                                    {
+                                        <div class="rounded border p-1 bg-light text-center" style="width: 48px; height: 48px; line-height: 40px;">
+                                            <span class="text-muted small">—</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="rounded border p-1 bg-light" style="width: 48px; height: 48px;">
+                                            <img src="@product.ImageUrl" alt="@product.Name" style="width: 100%; height: 100%; object-fit: contain;" />
+                                        </div>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="fw-semibold text-dark">@product.Name</div>
+                                    <div class="text-muted small">ID: #@product.Id</div>
+                                </td>
+                                @* Đọc được Category.Name là nhờ Include trong repository.
+                                   Thiếu Include thì dòng này ném NullReferenceException. *@
+                                <td>
+                                    <span class="badge bg-light text-dark border">@product.Category.Name</span>
+                                </td>
+                                <td class="text-end fw-bold text-danger">@product.Price.ToString("N0") đ</td>
+                                <td class="text-end">
+                                    @if (product.Stock > 0)
+                                    {
+                                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1">
+                                            @product.Stock
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2 py-1">
+                                            Hết hàng (0)
+                                        </span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    <div class="btn-group btn-group-sm">
+                                        <a asp-action="Edit" asp-route-id="@product.Id" class="btn btn-outline-secondary">Sửa</a>
+                                        <a asp-action="Delete" asp-route-id="@product.Id" class="btn btn-outline-danger">Xoá</a>
+                                    </div>
+                                </td>
+                            </tr>
                         }
-                        else
-                        {
-                            <img src="@product.ImageUrl" alt="@product.Name" style="max-height: 48px;" class="img-thumbnail" />
-                        }
-                    </td>
-                    <td>@product.Name</td>
-                    @* Đọc được Category.Name là nhờ Include trong repository.
-                       Thiếu Include thì dòng này ném NullReferenceException. *@
-                    <td>@product.Category.Name</td>
-                    <td class="text-end">@product.Price.ToString("N0") đ</td>
-                    <td class="text-end">@product.Stock</td>
-                    <td class="text-end">
-                        <a asp-action="Edit" asp-route-id="@product.Id" class="btn btn-sm btn-outline-secondary">Sửa</a>
-                        <a asp-action="Delete" asp-route-id="@product.Id" class="btn btn-sm btn-outline-danger">Xoá</a>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 }

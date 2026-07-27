@@ -2,14 +2,66 @@
     ViewData["Title"] = "Bảng điều khiển";
 }
 
-<h2>Bảng điều khiển quản trị</h2>
-
-<div class="alert alert-success">
-    Bạn vào được trang này vì claim <code>ClaimTypes.Role</code> trong cookie có
-    giá trị <strong>Admin</strong>. Tài khoản <code>Customer</code> sẽ bị
-    chuyển sang trang Không có quyền truy cập.
+<div class="mb-4">
+    <h1 class="es-section-title">Bảng điều khiển quản trị</h1>
+    <p class="es-section-subtitle">Tổng quan hệ thống và các liên kết quản lý nhanh</p>
 </div>
 
-<p>Đang đăng nhập: <strong>@User.Identity?.Name</strong></p>
+<div class="alert alert-success d-flex align-items-center gap-3 mb-4 shadow-sm">
+    <div class="fs-3">🛡️</div>
+    <div>
+        <strong>Xác thực Admin thành công:</strong> Bạn đang đăng nhập với tài khoản <strong>@User.Identity?.Name</strong>.
+        Trang này yêu cầu claim <code>ClaimTypes.Role</code> trong cookie có giá trị <strong>Admin</strong>.
+    </div>
+</div>
 
-<p class="text-muted">Chọn mục ở thanh bên trái để quản lý danh mục hoặc sản phẩm.</p>
+<div class="row g-4 mb-4">
+    @* Stat / Action Card 1: Danh mục *@
+    <div class="col-md-6 col-lg-3">
+        <div class="es-admin-stat-card">
+            <div class="es-admin-stat-icon bg-primary bg-opacity-10 text-primary">📁</div>
+            <h5 class="fw-bold mb-1">Danh mục</h5>
+            <p class="text-muted small mb-3">Quản lý cây danh mục sản phẩm của cửa hàng</p>
+            <a class="btn btn-sm btn-outline-primary w-100 fw-semibold"
+               asp-area="Admin" asp-controller="Category" asp-action="Index">
+                Quản lý danh mục →
+            </a>
+        </div>
+    </div>
+
+    @* Stat / Action Card 2: Sản phẩm *@
+    <div class="col-md-6 col-lg-3">
+        <div class="es-admin-stat-card">
+            <div class="es-admin-stat-icon bg-success bg-opacity-10 text-success">📦</div>
+            <h5 class="fw-bold mb-1">Sản phẩm</h5>
+            <p class="text-muted small mb-3">Thêm, sửa, xoá và cập nhật sản phẩm</p>
+            <a class="btn btn-sm btn-outline-success w-100 fw-semibold"
+               asp-area="Admin" asp-controller="Product" asp-action="Index">
+                Quản lý sản phẩm →
+            </a>
+        </div>
+    </div>
+
+    @* Stat / Action Card 3: Sửa hàng loạt *@
+    <div class="col-md-6 col-lg-3">
+        <div class="es-admin-stat-card">
+            <div class="es-admin-stat-icon bg-warning bg-opacity-10 text-warning">⚡</div>
+            <h5 class="fw-bold mb-1">Sửa hàng loạt</h5>
+            <p class="text-muted small mb-3">Cập nhật nhanh giá và tồn kho nhiều sản phẩm</p>
+            <a class="btn btn-sm btn-outline-warning text-dark w-100 fw-semibold"
+               asp-area="Admin" asp-controller="Product" asp-action="BulkEdit">
+                Sửa hàng loạt →
+            </a>
+        </div>
+    </div>
+
+    @* Stat / Action Card 4: Quyền hệ thống *@
+    <div class="col-md-6 col-lg-3">
+        <div class="es-admin-stat-card">
+            <div class="es-admin-stat-icon bg-info bg-opacity-10 text-info">👑</div>
+            <h5 class="fw-bold mb-1">Quyền Admin</h5>
+            <p class="text-muted small mb-3">Tài khoản đang có toàn quyền quản trị</p>
+            <span class="badge bg-info text-dark w-100 py-2">Đang hoạt động</span>
+        </div>
+    </div>
+</div>
