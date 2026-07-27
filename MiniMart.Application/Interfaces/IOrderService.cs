@@ -1,5 +1,7 @@
 using MiniMart.Application.Models;
+using MiniMart.Common;
 using MiniMart.Domain.Enums;
+using MiniMart.Domain.ValueObjects;
 
 namespace MiniMart.Application.Interfaces;
 
@@ -82,5 +84,23 @@ public interface IOrderService
     Task<OrderView?> GetMyOrderAsync(
         int orderId,
         int userId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Danh sách đơn CỦA CHÍNH người này, mới nhất trước, có phân trang.
+    ///
+    /// <para>
+    /// Hiện là pass-through xuống Repository, và vẫn phải đi qua Service vì lý do
+    /// giống <c>IProductService.GetProductsAsync</c>: đây là chỗ các quy tắc nghiệp vụ
+    /// sẽ được thêm vào (ẩn đơn đã huỷ, gộp đơn định kỳ) mà không phải sửa Controller.
+    /// </para>
+    /// </summary>
+    /// <param name="userId">
+    /// BẮT BUỘC từ <c>ICurrentUser.Id</c>, không bao giờ từ route hay query string.
+    /// </param>
+    Task<PagedResult<OrderSummary>> GetMyOrdersAsync(
+        int userId,
+        int page = 1,
+        int pageSize = 10,
         CancellationToken cancellationToken = default);
 }

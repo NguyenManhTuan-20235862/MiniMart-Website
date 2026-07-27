@@ -1,3 +1,5 @@
+using MiniMart.Domain.Enums;
+
 namespace MiniMart.Application.Models;
 
 /// <summary>
@@ -23,6 +25,14 @@ public sealed record OrderView(
     int Id,
     DateTime CreatedAt,
     decimal TotalAmount,
+
+    /// <summary>
+    /// Thêm ở Phase 9, trả một món nợ của Phase 6: cột <c>Order.Status</c> đã tồn tại
+    /// từ lúc làm VNPay nhưng chưa có màn hình nào hiện nó ra, nên khách thanh toán
+    /// xong không có cách nào biết hệ thống đã ghi nhận hay chưa.
+    /// </summary>
+    OrderStatus Status,
+
     ShippingInfo Shipping,
     IReadOnlyList<OrderLineView> Lines)
 {

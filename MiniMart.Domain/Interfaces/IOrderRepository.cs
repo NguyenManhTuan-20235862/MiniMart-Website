@@ -1,4 +1,6 @@
+using MiniMart.Common;
 using MiniMart.Domain.Entities;
+using MiniMart.Domain.ValueObjects;
 
 namespace MiniMart.Domain.Interfaces;
 
@@ -26,6 +28,27 @@ public interface IOrderRepository
     /// </para>
     /// </summary>
     Task<Order?> GetForUpdateAsync(int orderId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Danh sách đơn của MỘT người, mới nhất trước, có phân trang.
+    ///
+    /// <para>
+    /// Trả <see cref="OrderSummary"/> chứ không <see cref="Order"/>: trang danh sách
+    /// chỉ cần tổng tiền, trạng thái và số món. Trả entity thì hoặc thiếu
+    /// <c>Include(o =&gt; o.Items)</c> (số món luôn bằng 0, im lặng), hoặc có
+    /// <c>Include</c> và kéo về hàng trăm dòng <c>OrderDetail</c> để đếm rồi vứt.
+    /// </para>
+    /// <para>
+    /// <c>userId</c> là tham số BẮT BUỘC, không nullable và không có giá trị mặc định:
+    /// không tồn tại cách gọi "lấy tất cả đơn" qua đường này. Đó là chống IDOR bằng
+    /// CẤU TRÚC - cùng cách giỏ hàng chỉ nhận <c>productId</c>.
+    /// </para>
+    /// </summary>
+    Task<PagedResult<OrderSummary>> GetPagedForUserAsync(
+        int userId,
+        int page = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Một đơn kèm các dòng, chỉ đọc. Trả null nếu đơn không thuộc người này.</summary>
     Task<Order?> GetByIdForUserAsync(

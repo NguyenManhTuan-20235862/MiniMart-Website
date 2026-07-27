@@ -1,0 +1,89 @@
+@using MiniMart.Application.Models
+@model OrderView
+@{
+    ViewData["Title"] = $"Đơn hàng #{Model.Id}";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Đơn hàng #@Model.Id</h1>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Về danh sách</a>
+</div>
+
+<div class="mb-4">
+    <span class="badge @Model.Status.ToBadgeClass()" data-trang-thai>@Model.Status.ToText()</span>
+    <span class="text-muted ms-2">Đặt lúc @Model.CreatedAt.AddHours(7).ToString("dd/MM/yyyy HH:mm")</span>
+</div>
+
+@if (Model.Status == OrderStatus.Pending)
+{
+    @*
+        Nói rõ đơn chưa được thanh toán, nhưng KHÔNG hứa một nút "thanh toán lại" chưa
+        tồn tại. Luồng đó đang bị chặn bởi một hạn chế thật: vnp_TxnRef hiện là OrderId,
+        mà VNPay từ chối một TxnRef đã dùng - phải có bảng PaymentAttempt trước.
+        Hiện một nút bấm vào ra lỗi còn tệ hơn không có nút. Xem rules/payments.md.
+    *@
+    <div class="alert alert-warning">
+        Đơn này <strong>chưa được ghi nhận thanh toán</strong>. Nếu bạn vừa thanh toán qua
+        VNPay, trạng thái có thể mất vài phút để cập nhật. Đơn thanh toán khi nhận hàng (COD)
+        sẽ giữ trạng thái này cho tới khi giao xong.
+    </div>
+}
+
+<div class="row g-4">
+    <div class="col-md-7">
+        <h2 class="h5">Sản phẩm</h2>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Sản phẩm</th>
+                        <th scope="col" class="text-end">Đơn giá</th>
+                        <th scope="col" class="text-center">SL</th>
+                        <th scope="col" class="text-end">Thành tiền</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var dong in Model.Lines)
+                    {
+                        @*
+                            ProductName và UnitPrice đọc từ dữ liệu ĐÃ SNAPSHOT trong
+                            OrderDetail, không join sang Products. Shop đổi tên hay đổi
+                            giá thì đơn cũ vẫn hiện đúng thứ khách đã thấy lúc mua -
+                            nếu không thì lịch sử đơn hàng tự viết lại chính nó.
+                        *@
+                        <tr>
+                            <td>@dong.ProductName</td>
+                            <td class="text-end">@dong.UnitPrice.ToMoneyText() đ</td>
+                            <td class="text-center">@dong.Quantity</td>
+                            <td class="text-end">@dong.LineTotal.ToMoneyText() đ</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <th colspan="3" class="text-end">Tổng cộng</th>
+                        <th class="text-end" data-tong-tien>@Model.TotalAmount.ToMoneyText() đ</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <h2 class="h5">Giao tới</h2>
+        @*
+            Đọc từ 3 cột đã snapshot trên Orders, không join sang User: đơn phải hiện
+            đúng thông tin khai lúc đặt, kể cả khi hồ sơ tài khoản đã đổi sau đó.
+        *@
+        <dl class="row mb-0">
+            <dt class="col-4">Người nhận</dt>
+            <dd class="col-8">@Model.Shipping.RecipientName</dd>
+
+            <dt class="col-4">Điện thoại</dt>
+            <dd class="col-8">@Model.Shipping.RecipientPhone</dd>
+
+            <dt class="col-4">Địa chỉ</dt>
+            <dd class="col-8">@Model.Shipping.Address</dd>
+        </dl>
+    </div>
+</div>

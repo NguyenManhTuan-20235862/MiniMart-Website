@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Logging;
 using MiniMart.Application.Interfaces;
 using MiniMart.Application.Models;
+using MiniMart.Common;
 using MiniMart.Common.Exceptions;
 using MiniMart.Domain.Entities;
 using MiniMart.Domain.Enums;
 using MiniMart.Domain.Interfaces;
+using MiniMart.Domain.ValueObjects;
 
 namespace MiniMart.Application.Services;
 
@@ -316,6 +318,13 @@ public class OrderService : IOrderService
             _ => false
         };
 
+    public Task<PagedResult<OrderSummary>> GetMyOrdersAsync(
+        int userId,
+        int page = 1,
+        int pageSize = 10,
+        CancellationToken cancellationToken = default) =>
+        _orderRepository.GetPagedForUserAsync(userId, page, pageSize, cancellationToken);
+
     public async Task<OrderView?> GetMyOrderAsync(
         int orderId,
         int userId,
@@ -334,6 +343,7 @@ public class OrderService : IOrderService
             order.Id,
             order.CreatedAt,
             order.TotalAmount,
+            order.Status,
 
             // Đọc từ CỘT trên Orders, không join sang User: đơn hàng phải hiện đúng
             // thông tin đã khai lúc đặt, kể cả khi hồ sơ tài khoản đã đổi sau đó.
