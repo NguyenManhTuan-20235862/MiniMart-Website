@@ -15,6 +15,12 @@ public class ProductController : Controller
 {
     private const int PageSize = 12;
 
+    /// <summary>
+    /// Bốn gợi ý: vừa đủ một hàng trên desktop (row-cols-lg-4) nên không có dòng
+    /// thứ hai lẻ loi ở mọi kích thước màn hình.
+    /// </summary>
+    private const int SoSanPhamLienQuan = 4;
+
     /// <summary>Số trang tiếp theo; rỗng khi đã hết dữ liệu.</summary>
     public const string NextPageHeader = "X-Next-Page";
 
@@ -23,6 +29,52 @@ public class ProductController : Controller
     public ProductController(IProductService productService)
     {
         _productService = productService;
+    }
+
+    /// <summary>
+    /// Trang chi tiết một sản phẩm: <c>/Product/Details/5</c>.
+    ///
+    /// <para>
+    /// Giữ route MẶC ĐỊNH thay vì gắn <c>[HttpGet("Product/{id:int}")]</c> cho URL
+    /// ngắn <c>/Product/5</c>. Lý do không phải gu: attribute routing trên một action
+    /// sẽ TẮT route mặc định cho chính action đó, nên <c>/Product/Details/5</c> chết
+    /// theo — trong khi <c>/Order/Details/3</c> đang dùng đúng dạng dài. Một dự án hai
+    /// kiểu URL tốn nhiều hơn cái URL ngắn mang lại.
+    /// </para>
+    /// </summary>
+    /// <remarks>
+    /// Không <c>[Authorize]</c>: xem hàng là việc của mọi người, kể cả khách vãng lai.
+    /// </remarks>
+    [HttpGet]
+    public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
+    {
+        var product = await _productService.GetByIdAsync(id, cancellationToken);
+
+        if (product is null)
+        {
+            // 404 chứ không phải trang trống kèm 200: id sai là "không có thứ này",
+            // và trả 200 cho một trang rỗng khiến công cụ tìm kiếm lập chỉ mục nó.
+            return NotFound();
+        }
+
+        // ★ Hai await NỐI TIẾP, tuyệt đối không Task.WhenAll.
+        //
+        // Ở đây có tới hai lý do độc lập, và lý do thứ hai mới là cái không thể lách:
+        //   1. Hai lệnh dùng chung một DbContext (Scoped) mà DbContext KHÔNG
+        //      thread-safe -> "A second operation was started on this context instance".
+        //   2. Lệnh thứ hai cần product.CategoryId của lệnh thứ nhất. Chúng phụ thuộc
+        //      dữ liệu, nên song song hoá là vô nghĩa ngay từ đầu.
+        //
+        // Đặt SAU lệnh kiểm null cũng có chủ ý: id không tồn tại thì không tốn một
+        // round-trip nào để đi tìm sản phẩm liên quan của một danh mục không có.
+        var lienQuan = await _productService.GetRelatedAsync(
+            product.Id, product.CategoryId, SoSanPhamLienQuan, cancellationToken);
+
+        return View(new ProductDetailViewModel
+        {
+            Product = product,
+            SanPhamLienQuan = lienQuan
+        });
     }
 
     /// <summary>
@@ -54,6 +106,7 @@ public class ProductController : Controller
         // page/pageSize đã được Repository kẹp lại, nên ?page=-5 không làm vỡ SQL.
         var result = await _productService.GetProductsAsync(
             categoryId: filter.CategoryId,
+            search: filter.Search,
             minPrice: filter.MinPrice,
             maxPrice: filter.MaxPrice,
             page: page,

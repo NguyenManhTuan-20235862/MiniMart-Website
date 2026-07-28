@@ -32,6 +32,7 @@
         // `if (x.HasValue) query = query.Where(...)` trong ProductRepository.
         const filters = {
             categoryId: button.dataset.categoryId,
+            search: button.dataset.search,
             minPrice: button.dataset.minPrice,
             maxPrice: button.dataset.maxPrice
         };

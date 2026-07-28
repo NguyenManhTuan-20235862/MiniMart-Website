@@ -3,70 +3,101 @@
     ViewData["Title"] = "Sửa sản phẩm";
 }
 
-<h2>Sửa sản phẩm</h2>
+<div class="mb-4">
+    <div class="d-flex align-items-center gap-2">
+        <a asp-action="Index" class="btn btn-sm btn-outline-secondary rounded-circle" title="Quay lại">←</a>
+        <h1 class="es-section-title mb-0">Cập nhật sản phẩm</h1>
+    </div>
+    <p class="es-section-subtitle mt-1 mb-0">Chỉnh sửa thông tin chi tiết của sản phẩm #@Model.Id</p>
+</div>
 
-<div class="col-md-6">
-    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
-        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+<div class="row">
+    <div class="col-lg-8 col-xl-7">
+        <div class="card es-checkout-card mb-4">
+            <div class="card-header fw-bold es-checkout-header">
+                <span class="es-checkout-header-icon">✏️</span>
+                Thông tin sản phẩm #@Model.Id
+            </div>
 
-        @* Đường dẫn ảnh cũ phải đi vòng qua form, nếu không POST sẽ không biết
-           ảnh hiện tại là gì để dọn file cũ sau khi thay ảnh. *@
-        <input type="hidden" asp-for="ExistingImageUrl" />
+            <div class="card-body p-4">
+                <form asp-action="Edit" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
 
-        @*
-            Phiên bản bản ghi lúc form được MỞ, gửi lại để server phát hiện xung
-            đột. Đây là mảnh ghép biến Optimistic Concurrency từ "bảo vệ vài
-            millisecond trong Service" thành "bảo vệ suốt thời gian form mở".
+                    @* Đường dẫn ảnh cũ phải đi vòng qua form, nếu không POST sẽ không biết
+                       ảnh hiện tại là gì để dọn file cũ sau khi thay ảnh. *@
+                    <input type="hidden" asp-for="ExistingImageUrl" />
 
-            Render Base64 THỦ CÔNG chứ không dùng asp-for: InputTagHelper gọi
-            ToString() trên byte[] và cho ra chuỗi "System.Byte[]", model binder
-            phía sau không giải mã được - lỗi im lặng, form vẫn submit bình thường.
-        *@
-        <input type="hidden" name="RowVersion"
-               value="@(Model.RowVersion is null ? null : Convert.ToBase64String(Model.RowVersion))" />
+                    @*
+                        Phiên bản bản ghi lúc form được MỞ, gửi lại để server phát hiện xung
+                        đột. Đây là mảnh ghép biến Optimistic Concurrency từ "bảo vệ vài
+                        millisecond trong Service" thành "bảo vệ suốt thời gian form mở".
 
-        <div class="mb-3">
-            <label asp-for="Name" class="form-label"></label>
-            <input asp-for="Name" class="form-control" />
-            <span asp-validation-for="Name" class="text-danger"></span>
+                        Render Base64 THỦ CÔNG chứ không dùng asp-for: InputTagHelper gọi
+                        ToString() trên byte[] và cho ra chuỗi "System.Byte[]", model binder
+                        phía sau không giải mã được - lỗi im lặng, form vẫn submit bình thường.
+                    *@
+                    <input type="hidden" name="RowVersion"
+                           value="@(Model.RowVersion is null ? null : Convert.ToBase64String(Model.RowVersion))" />
+
+                    <div class="mb-3">
+                        <label asp-for="Name" class="form-label font-semibold text-muted small uppercase"></label>
+                        <input asp-for="Name" class="form-control" />
+                        <span asp-validation-for="Name" class="text-danger small"></span>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label asp-for="CategoryId" class="form-label font-semibold text-muted small uppercase"></label>
+                            <select asp-for="CategoryId" asp-items="Model.Categories" class="form-select">
+                                <option value="">-- Chọn danh mục --</option>
+                            </select>
+                            <span asp-validation-for="CategoryId" class="text-danger small"></span>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label asp-for="Price" class="form-label font-semibold text-muted small uppercase"></label>
+                            <div class="input-group">
+                                <input asp-for="Price" class="form-control text-end" />
+                                <span class="input-group-text">đ</span>
+                            </div>
+                            <span asp-validation-for="Price" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label asp-for="Stock" class="form-label font-semibold text-muted small uppercase"></label>
+                            <input asp-for="Stock" class="form-control text-end" />
+                            <span asp-validation-for="Stock" class="text-danger small"></span>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label asp-for="ImageFile" class="form-label font-semibold text-muted small uppercase"></label>
+                            @if (!string.IsNullOrEmpty(Model.ExistingImageUrl))
+                            {
+                                <div class="mb-2 p-2 bg-light rounded border d-inline-block">
+                                    <img src="@Model.ExistingImageUrl" alt="Ảnh hiện tại" style="max-height: 100px; object-fit: contain;" class="rounded border" />
+                                    <div class="text-muted small text-center mt-1">Ảnh hiện tại</div>
+                                </div>
+                            }
+                            <input asp-for="ImageFile" type="file" class="form-control" accept="image/*" />
+                            <span asp-validation-for="ImageFile" class="text-danger small"></span>
+                            <div class="form-text">Bỏ trống nếu muốn giữ ảnh hiện tại.</div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 pt-3 border-top">
+                        <button type="submit" class="btn btn-primary fw-semibold px-4 shadow-sm">
+                            Lưu thay đổi
+                        </button>
+                        <a asp-action="Index" class="btn btn-outline-secondary px-4">
+                            Huỷ
+                        </a>
+                    </div>
+                </form>
+            </div>
         </div>
-
-        <div class="mb-3">
-            <label asp-for="CategoryId" class="form-label"></label>
-            <select asp-for="CategoryId" asp-items="Model.Categories" class="form-select">
-                <option value="">-- Chọn danh mục --</option>
-            </select>
-            <span asp-validation-for="CategoryId" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="Price" class="form-label"></label>
-            <input asp-for="Price" class="form-control" />
-            <span asp-validation-for="Price" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="Stock" class="form-label"></label>
-            <input asp-for="Stock" class="form-control" />
-            <span asp-validation-for="Stock" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="ImageFile" class="form-label"></label>
-            @if (!string.IsNullOrEmpty(Model.ExistingImageUrl))
-            {
-                <div class="mb-2">
-                    <img src="@Model.ExistingImageUrl" alt="Ảnh hiện tại" style="max-height: 120px;" class="img-thumbnail" />
-                </div>
-            }
-            <input asp-for="ImageFile" type="file" class="form-control" accept="image/*" />
-            <span asp-validation-for="ImageFile" class="text-danger"></span>
-            <div class="form-text">Bỏ trống nếu muốn giữ ảnh hiện tại.</div>
-        </div>
-
-        <button type="submit" class="btn btn-primary">Lưu</button>
-        <a asp-action="Index" class="btn btn-link">Huỷ</a>
-    </form>
+    </div>
 </div>
 
 @section Scripts {

@@ -151,10 +151,10 @@ public class ProductLoadMoreTests : IAsyncLifetime
 
         // SP01..SP12 ở trang 1, SP13..SP15 ở trang 2. Thiếu tie-breaker trong
         // OrderBy thì một sản phẩm có thể xuất hiện ở cả hai trang.
-        Assert.Contains(">SP12</h6>", trang1);
-        Assert.DoesNotContain(">SP12</h6>", trang2);
-        Assert.Contains(">SP13</h6>", trang2);
-        Assert.DoesNotContain(">SP13</h6>", trang1);
+        Assert.Contains(">SP12</a>", trang1);
+        Assert.DoesNotContain(">SP12</a>", trang2);
+        Assert.Contains(">SP13</a>", trang2);
+        Assert.DoesNotContain(">SP13</a>", trang1);
     }
 
     [Fact]
@@ -165,10 +165,10 @@ public class ProductLoadMoreTests : IAsyncLifetime
 
         // Dữ liệu: 15 sản phẩm giá 10.000 .. 150.000 -> khớp SP03..SP06.
         Assert.Equal(4, DemThe(html));
-        Assert.Contains(">SP03</h6>", html);
-        Assert.Contains(">SP06</h6>", html);
-        Assert.DoesNotContain(">SP02</h6>", html);
-        Assert.DoesNotContain(">SP07</h6>", html);
+        Assert.Contains(">SP03</a>", html);
+        Assert.Contains(">SP06</a>", html);
+        Assert.DoesNotContain(">SP02</a>", html);
+        Assert.DoesNotContain(">SP07</a>", html);
         Assert.True(string.IsNullOrEmpty(trangKe));
     }
 
@@ -187,9 +187,9 @@ public class ProductLoadMoreTests : IAsyncLifetime
 
         // Quên truyền minPrice sang trang 2 là bug kinh điển: trang 2 sẽ chứa
         // SP01/SP02 đã bị loại ở trang 1.
-        Assert.Contains(">SP15</h6>", trang2);
-        Assert.DoesNotContain(">SP01</h6>", trang2);
-        Assert.DoesNotContain(">SP02</h6>", trang2);
+        Assert.Contains(">SP15</a>", trang2);
+        Assert.DoesNotContain(">SP01</a>", trang2);
+        Assert.DoesNotContain(">SP02</a>", trang2);
     }
 
     [Fact]

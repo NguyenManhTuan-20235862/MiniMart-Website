@@ -1,94 +1,146 @@
 @using System.Security.Claims
 @{
-    ViewData["Title"] = "Thông tin tài khoản";
+    ViewData["Title"] = "Tài khoản của tôi";
     var username = User.Identity?.Name ?? "Khách";
     var initial = !string.IsNullOrEmpty(username) ? username[0].ToString().ToUpper() : "U";
     var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
     var isAdmin = User.IsInRole("Admin");
 }
 
-@* Profile Header Card *@
-<div class="es-profile-header-card">
-    <div class="es-profile-avatar">@initial</div>
-    <div class="flex-grow-1">
-        <div class="d-flex align-items-center gap-2 mb-1">
-            <h1 class="es-profile-title mb-0">@username</h1>
-            @if (isAdmin)
-            {
-                <span class="badge bg-primary">Quản trị viên (Admin)</span>
-            }
-            else
-            {
-                <span class="badge bg-secondary">Khách hàng</span>
-            }
+@* Header Profile Card *@
+<div class="card border-0 shadow-sm rounded-3 p-4 mb-4" style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); color: #fff;">
+    <div class="d-flex align-items-center gap-4 flex-wrap">
+        <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow"
+             style="width: 72px; height: 72px; background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); font-size: 2rem; color: #fff;">
+            @initial
         </div>
-        <div class="es-profile-subtitle">
-            ID Tài khoản: <strong>#@userId</strong> &middot; Đã xác thực qua Cookie
+        <div class="flex-grow-1">
+            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                <h2 class="fw-bold mb-0 text-white" style="font-size: 1.6rem;">@username</h2>
+                @if (isAdmin)
+                {
+                    <span class="badge bg-warning text-dark fw-bold px-3 py-1">👑 Quản trị viên (Admin)</span>
+                }
+                else
+                {
+                    <span class="badge bg-primary text-white fw-bold px-3 py-1" style="background-color: #2563EB !important;">👤 Khách hàng thành viên</span>
+                }
+            </div>
+            <div class="text-white-50 small">
+                Mã tài khoản: <strong class="text-white">#@userId</strong>
+            </div>
         </div>
     </div>
 </div>
 
+@* Lưới thẻ tác vụ nhanh *@
+<div class="row g-4 mb-4">
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-3 p-3 h-100 bg-white">
+            <div class="fs-2 mb-2">📦</div>
+            <h6 class="fw-bold text-dark mb-1">Đơn hàng của tôi</h6>
+            <p class="text-secondary small mb-3">Xem lịch sử đơn hàng và trạng thái vận chuyển</p>
+            <a asp-controller="Order" asp-action="Index" class="btn btn-sm btn-outline-primary w-100 fw-semibold rounded-2 mt-auto">
+                Quản lý đơn hàng →
+            </a>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-3 p-3 h-100 bg-white">
+            <div class="fs-2 mb-2">🛒</div>
+            <h6 class="fw-bold text-dark mb-1">Giỏ hàng hiện tại</h6>
+            <p class="text-secondary small mb-3">Kiểm tra các sản phẩm đang có trong giỏ hàng</p>
+            <a asp-controller="Cart" asp-action="Index" class="btn btn-sm btn-outline-primary w-100 fw-semibold rounded-2 mt-auto">
+                Xem giỏ hàng →
+            </a>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-3 p-3 h-100 bg-white">
+            <div class="fs-2 mb-2">⚡</div>
+            <h6 class="fw-bold text-dark mb-1">Cửa hàng sản phẩm</h6>
+            <p class="text-secondary small mb-3">Khám phá các thiết bị công nghệ chính hãng mới nhất</p>
+            <a asp-controller="Home" asp-action="Index" class="btn btn-sm btn-outline-primary w-100 fw-semibold rounded-2 mt-auto">
+                Đến mua sắm →
+            </a>
+        </div>
+    </div>
+
+    @if (isAdmin)
+    {
+        <div class="col-md-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-3 p-3 h-100 bg-white border-start border-warning border-4">
+                <div class="fs-2 mb-2">⚙️</div>
+                <h6 class="fw-bold text-dark mb-1">Bảng điều khiển Admin</h6>
+                <p class="text-secondary small mb-3">Quản lý danh mục, sản phẩm, khách hàng và hệ thống</p>
+                <a asp-area="Admin" asp-controller="Dashboard" asp-action="Index" class="btn btn-sm btn-primary w-100 fw-semibold rounded-2 mt-auto" style="background-color: #2563EB; border-color: #2563EB;">
+                    Vào trang Admin →
+                </a>
+            </div>
+        </div>
+    }
+</div>
+
+@* Thông tin tài khoản chi tiết & Đăng xuất *@
 <div class="row g-4">
-    @* Cột trái: Tóm tắt trạng thái *@
-    <div class="col-lg-5">
-        <div class="card es-checkout-card">
-            <div class="card-header fw-bold es-checkout-header">
-                <span class="es-checkout-header-icon">👤</span>
-                Thông tin định danh
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white">
+            <div class="card-header bg-white py-3 px-4 fw-bold text-dark border-bottom border-light d-flex align-items-center gap-2">
+                <span>👤</span> Thông tin tài khoản
             </div>
             <div class="card-body p-4">
-                <ul class="list-group list-group-flush mb-0">
-                    <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                        <span class="text-muted small">Tên người dùng</span>
-                        <strong class="text-dark">@User.Identity?.Name</strong>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                        <span class="text-muted small">Trạng thái xác thực</span>
-                        <span class="badge bg-success">@User.Identity?.IsAuthenticated</span>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                        <span class="text-muted small">Quyền Admin</span>
-                        <span class="badge @(isAdmin ? "bg-primary" : "bg-light text-dark border")">@isAdmin</span>
-                    </li>
-                    <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
-                        <span class="text-muted small">User ID (NameIdentifier)</span>
-                        <code>@userId</code>
-                    </li>
-                </ul>
-            </div>
-            <div class="card-footer bg-light p-3 small text-muted">
-                💡 <em>Toàn bộ dữ liệu được giải mã từ cookie <code>MiniMart.Auth</code>, không hề có truy vấn database nào trong request này.</em>
+                <div class="row g-3">
+                    <div class="col-sm-6">
+                        <label class="text-secondary small fw-semibold">Tên người dùng</label>
+                        <div class="fw-bold text-dark fs-6">@username</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="text-secondary small fw-semibold">Vai trò tài khoản</label>
+                        <div>
+                            @if (isAdmin)
+                            {
+                                <span class="badge bg-warning text-dark">Quản trị viên (Admin)</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Khách hàng (Customer)</span>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="text-secondary small fw-semibold">Mã định danh (User ID)</label>
+                        <div class="fw-mono text-dark small">#@userId</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="text-secondary small fw-semibold">Trạng thái tài khoản</label>
+                        <div>
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1">
+                                &bull; Đã đăng nhập
+                            </span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    @* Cột phải: Bảng Claims chi tiết *@
-    <div class="col-lg-7">
-        <div class="card es-checkout-card">
-            <div class="card-header fw-bold es-checkout-header">
-                <span class="es-checkout-header-icon">🔑</span>
-                Chi tiết Claims trong Cookie
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white h-100">
+            <div class="card-header bg-white py-3 px-4 fw-bold text-dark border-bottom border-light d-flex align-items-center gap-2">
+                <span>🔑</span> Thao tác tài khoản
             </div>
-            <div class="card-body p-3">
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
-                        <thead>
-                            <tr class="text-muted small">
-                                <th scope="col" style="min-width: 180px;">Claim Type</th>
-                                <th scope="col">Giá trị</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var claim in User.Claims)
-                            {
-                                <tr>
-                                    <td><code class="small">@claim.Type</code></td>
-                                    <td class="fw-semibold text-dark small">@claim.Value</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+            <div class="card-body p-4 d-flex flex-column justify-content-center">
+                <p class="text-secondary small mb-4">
+                    Bạn có thể đăng xuất khỏi hệ thống bất kỳ lúc nào để đảm bảo an toàn cho tài khoản cá nhân.
+                </p>
+
+                <form asp-area="" asp-controller="Account" asp-action="Logout" method="post" class="m-0">
+                    <button type="submit" class="btn btn-danger w-100 fw-semibold py-2 rounded-2">
+                        🔒 Đăng xuất khỏi tài khoản
+                    </button>
+                </form>
             </div>
         </div>
     </div>

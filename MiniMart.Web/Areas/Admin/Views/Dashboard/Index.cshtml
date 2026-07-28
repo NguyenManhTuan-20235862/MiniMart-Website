@@ -55,13 +55,16 @@
         </div>
     </div>
 
-    @* Stat / Action Card 4: Quyền hệ thống *@
+    @* Stat / Action Card 4: Khách hàng *@
     <div class="col-md-6 col-lg-3">
         <div class="es-admin-stat-card">
-            <div class="es-admin-stat-icon bg-info bg-opacity-10 text-info">👑</div>
-            <h5 class="fw-bold mb-1">Quyền Admin</h5>
-            <p class="text-muted small mb-3">Tài khoản đang có toàn quyền quản trị</p>
-            <span class="badge bg-info text-dark w-100 py-2">Đang hoạt động</span>
+            <div class="es-admin-stat-icon bg-info bg-opacity-10 text-info">👥</div>
+            <h5 class="fw-bold mb-1">Khách hàng</h5>
+            <p class="text-muted small mb-3">Xem danh sách tài khoản đã đăng ký trong cửa hàng</p>
+            <a class="btn btn-sm btn-outline-info text-dark w-100 fw-semibold"
+               asp-area="Admin" asp-controller="User" asp-action="Index">
+                Quản lý khách hàng →
+            </a>
         </div>
     </div>
 </div>

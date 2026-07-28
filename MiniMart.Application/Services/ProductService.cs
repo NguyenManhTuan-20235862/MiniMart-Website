@@ -30,13 +30,14 @@ public class ProductService : IProductService
 
     public Task<PagedResult<Product>> GetProductsAsync(
         int? categoryId = null,
+        string? search = null,
         decimal? minPrice = null,
         decimal? maxPrice = null,
         int page = 1,
         int pageSize = 12,
         CancellationToken cancellationToken = default) =>
         _productRepository.GetProductsAsync(
-            categoryId, minPrice, maxPrice, page, pageSize, cancellationToken);
+            categoryId, search, minPrice, maxPrice, page, pageSize, cancellationToken);
 
     public Task<List<Product>> GetAllAsync(CancellationToken cancellationToken = default) =>
         _productRepository.GetAllAsync(cancellationToken);
@@ -48,6 +49,13 @@ public class ProductService : IProductService
 
     public Task<Product?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
         _productRepository.GetByIdAsync(id, cancellationToken);
+
+    public Task<List<Product>> GetRelatedAsync(
+        int productId,
+        int categoryId,
+        int take = 4,
+        CancellationToken cancellationToken = default) =>
+        _productRepository.GetRelatedAsync(productId, categoryId, take, cancellationToken);
 
     public Task<List<Product>> GetByIdsAsync(
         IEnumerable<int> ids,

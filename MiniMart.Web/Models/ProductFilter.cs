@@ -21,6 +21,9 @@ namespace MiniMart.Web.Models;
 /// </summary>
 public class ProductFilter : IValidatableObject
 {
+    [StringLength(100, ErrorMessage = "Từ khoá tìm kiếm không được quá 100 ký tự.")]
+    public string? Search { get; set; }
+
     public int? CategoryId { get; set; }
 
     // Ràng buộc thuộc về BẢN THÂN giá trị (giá không thể âm) -> Data Annotation,
@@ -44,7 +47,10 @@ public class ProductFilter : IValidatableObject
     public decimal? MaxPrice { get; set; }
 
     public bool HasAnyFilter =>
-        CategoryId is not null || MinPrice is not null || MaxPrice is not null;
+        !string.IsNullOrWhiteSpace(Search)
+        || CategoryId is not null
+        || MinPrice is not null
+        || MaxPrice is not null;
 
     /// <summary>
     /// Chuỗi InvariantCulture để đổ vào <c>value</c> của input và <c>data-*</c>

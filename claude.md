@@ -105,6 +105,9 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 | Hai dòng cùng `Id` trong một lần cập nhật hàng loạt | Identity map cho ra MỘT object → dòng sau đè dòng trước, báo "đã cập nhật 2 sản phẩm" |
 | Server sửa giá trị của một tham số action (kẹp `page`) mà quên `ModelState.Remove` | `asp-for` render lại giá trị THÔ, và lần submit sau gửi lại đúng giá trị bậy đó |
 | Helper đăng nhập trong test chấp nhận **200** | Đăng nhập THẤT BẠI cũng là 200 (render lại form) → test chạy tiếp không cookie, đỏ ở chỗ chẳng liên quan |
+| `max="@Model.Stock"` cho ô nhập số lượng ở trang chi tiết | In bảng tồn kho của **toàn shop** vào HTML ở mọi lượt xem. Trần đúng là `100` (trần của `AddToCartRequest`); giới hạn thật do `CartService` kẹp |
+| Bọc **cả thẻ sản phẩm** trong `<a>` | `<form>` lồng trong `<a>` là HTML không hợp lệ — trình duyệt tự sửa cây DOM và nút "Thêm vào giỏ" hỏng theo kiểu khó đoán |
+| Regex non-greedy `<a…>(.*?)</a>` để kiểm thẻ lồng nhau | Khớp tới `</a>` **đầu tiên** nên không bao giờ thấy `<form>` bên trong — test xanh mà không chứng minh gì. Regex không đếm được cấu trúc lồng; phải đếm độ sâu |
 | Test bóc `value="…"` từ HTML mà **không `HtmlDecode`** | Base64 chứa `+` bị render thành `&#x2B;` → POST lại không giải mã được → RowVersion null → **không xung đột nào bị phát hiện**; đỏ NGẪU NHIÊN, trông như flaky hạ tầng |
 
 ## Môi trường
@@ -137,8 +140,6 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 ## Nợ kỹ thuật đã biết (cố ý chưa làm, đừng "sửa" nửa vời)
 
 ### Hoãn có chủ đích — KHÔNG làm cho tới khi điều kiện đủ
-- **Trang chi tiết sản phẩm chưa làm**, nên `/Product` trả 404 (chỉ có action `LoadMore`).
-  Đây là **tính năng chưa làm**, không phải nợ kỹ thuật — không có gì hỏng, chỉ là chưa có.
 - `Cart`/`CartItem` **chưa có `RowVersion`**, và chưa cần: giỏ hàng là dữ liệu của MỘT
   người, không có hai người cùng sửa một giỏ. Trường hợp duy nhất là một người mở hai tab,
   và ở đó "ghi sau thắng" đúng ý muốn của họ. Việc cần khoá thật là **trừ tồn kho lúc đặt
@@ -227,6 +228,9 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 - ~~Trang "Đơn hàng của tôi"~~ → đã làm ở Phase 9. Danh sách dùng read model riêng
   (`OrderSummary`) chiếu ngay trong truy vấn; đừng "đơn giản hoá" thành `Include(o => o.Items)`,
   xem `.claude/rules/data-access.md`.
+- ~~Trang chi tiết sản phẩm~~ → đã làm ở Phase 10. `/Product/Details/{id}` giữ route MẶC
+  ĐỊNH; đừng "làm đẹp URL" thành `/Product/5` bằng attribute route — nó tắt route mặc định
+  cho chính action đó và làm dự án có hai kiểu URL. Xem `.claude/rules/web.md`.
 - ~~Trừ tồn kho chống oversell~~ → đã làm bằng Optimistic trên `Products.RowVersion`, có
   test song song trên SQL Server thật. Đừng đổi `IsRowVersion()` — mutation đã chứng minh
   bỏ nó đi là bán 10 món khi chỉ có 5.

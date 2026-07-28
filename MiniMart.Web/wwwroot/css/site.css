@@ -8,30 +8,30 @@
 
 /* ---- Design tokens ---- */
 :root {
-    --es-bg:          #f8f9fc;
+    --es-bg:          #F0F4FF;
     --es-surface:     #ffffff;
-    --es-navy:        #0d1117;
-    --es-navy-mid:    #161b22;
-    --es-border:      rgba(0, 0, 0, 0.08);
-    --es-blue:        #4f8ef7;
-    --es-blue-dark:   #2d6fe0;
-    --es-cyan:        #00d4ff;
-    --es-text:        #1a1f2e;
-    --es-text-muted:  #6b7280;
-    --es-danger:      #ef4444;
-    --es-success:     #10b981;
-    --es-warning:     #f59e0b;
+    --es-navy:        #0F172A;
+    --es-navy-mid:    #1E293B;
+    --es-border:      #E2E8F0;
+    --es-blue:        #2563EB;
+    --es-blue-dark:   #1D4ED8;
+    --es-cyan:        #00D4FF;
+    --es-text:        #0F172A;
+    --es-text-muted:  #64748B;
+    --es-danger:      #DC2626;
+    --es-success:     #10B981;
+    --es-warning:     #F59E0B;
     --es-radius:      12px;
     --es-radius-sm:   8px;
-    --es-shadow:      0 1px 3px rgba(0,0,0,.08), 0 4px 12px rgba(0,0,0,.05);
-    --es-shadow-hover:0 4px 12px rgba(0,0,0,.12), 0 8px 24px rgba(0,0,0,.08);
+    --es-shadow:      0 4px 20px rgba(15, 23, 42, 0.05);
+    --es-shadow-hover:0 8px 30px rgba(37, 99, 235, 0.12);
     --es-transition:  0.2s ease;
 }
 
 /* ---- Base ---- */
 html {
     font-size: 14px;
-    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: 'Hanken Grotesk', 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -43,6 +43,7 @@ body {
     background: var(--es-bg);
     color: var(--es-text);
     margin-bottom: 0;
+    font-family: 'Hanken Grotesk', 'Inter', system-ui, sans-serif;
 }
 
 /* ---- Focus ring ---- */
@@ -869,4 +870,78 @@ body {
     justify-content: center;
     font-size: 1.5rem;
     margin-bottom: 1rem;
+}
+
+/* ============================================================
+   PRODUCT DETAIL
+   ============================================================ */
+
+/* Link bọc ảnh trên thẻ sản phẩm. Phải chiếm trọn vùng ảnh, nếu không thì
+   chỉ đúng vài pixel của tấm ảnh là bấm được. */
+.es-product-img-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.es-product-name-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.es-product-name-link:hover {
+    color: var(--es-blue);
+    text-decoration: underline;
+}
+
+.es-detail-img-wrap {
+    background: #f3f4f8;
+    border: 1px solid var(--es-border);
+    border-radius: var(--es-radius);
+    height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.es-detail-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 1.5rem;
+}
+
+.es-detail-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--es-text);
+    line-height: 1.35;
+    margin-bottom: 0.75rem;
+}
+
+/* Cùng màu đỏ với giá trên thẻ sản phẩm: giá là thứ người dùng quét mắt tìm,
+   nên nó phải trông giống nhau ở mọi trang. */
+.es-detail-price {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #DC2626;
+    margin-bottom: 0.75rem;
+}
+
+.es-detail-qty {
+    width: 96px;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* Nút "Thêm vào giỏ" trên thẻ sản phẩm là block chiếm trọn chiều rộng thẻ.
+   Ở trang chi tiết nó nằm cạnh ô số lượng nên phải bỏ width: 100%. */
+.es-btn-add-cart-lg {
+    display: inline-block;
+    width: auto;
+    padding: 0.6rem 2rem;
+    font-size: 0.95rem;
 }

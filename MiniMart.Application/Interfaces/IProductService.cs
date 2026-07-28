@@ -14,6 +14,7 @@ public interface IProductService
     /// </summary>
     Task<PagedResult<Product>> GetProductsAsync(
         int? categoryId = null,
+        string? search = null,
         decimal? minPrice = null,
         decimal? maxPrice = null,
         int page = 1,
@@ -25,6 +26,21 @@ public interface IProductService
     Task<List<Product>> GetByCategoryAsync(int categoryId, CancellationToken cancellationToken = default);
 
     Task<Product?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gợi ý vài sản phẩm cùng danh mục cho cuối trang chi tiết, ưu tiên món còn hàng.
+    ///
+    /// <para>
+    /// Trả về danh sách RỖNG khi danh mục chỉ có đúng sản phẩm đang xem — đó là kết
+    /// cục bình thường, không phải lỗi, nên tầng Web chỉ việc không hiển thị khu vực
+    /// gợi ý chứ không phải xử lý ngoại lệ nào.
+    /// </para>
+    /// </summary>
+    Task<List<Product>> GetRelatedAsync(
+        int productId,
+        int categoryId,
+        int take = 4,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Nhiều sản phẩm trong MỘT truy vấn. Trả về ít phần tử hơn số id truyền vào nếu

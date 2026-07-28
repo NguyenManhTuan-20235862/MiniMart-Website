@@ -37,6 +37,7 @@ public class HomeController : Controller
         // "A second operation was started on this context instance".
         var products = await _productService.GetProductsAsync(
             categoryId: filter.CategoryId,
+            search: filter.Search,
             minPrice: filter.MinPrice,
             maxPrice: filter.MaxPrice,
             page: 1,

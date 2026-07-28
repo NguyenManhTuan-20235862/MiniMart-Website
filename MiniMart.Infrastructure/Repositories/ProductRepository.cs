@@ -17,6 +17,7 @@ public class ProductRepository : IProductRepository
 
     public async Task<PagedResult<Product>> GetProductsAsync(
         int? categoryId = null,
+        string? search = null,
         decimal? minPrice = null,
         decimal? maxPrice = null,
         int page = 1,
@@ -40,6 +41,12 @@ public class ProductRepository : IProductRepository
         if (categoryId.HasValue)
         {
             query = query.Where(p => p.CategoryId == categoryId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var keyword = search.Trim();
+            query = query.Where(p => p.Name.Contains(keyword));
         }
 
         if (minPrice.HasValue)
@@ -124,6 +131,36 @@ public class ProductRepository : IProductRepository
             .AsNoTracking()
             // Contains được EF Core dịch thành `WHERE [p].[Id] IN (@p0, @p1, ...)`.
             .Where(p => danhSach.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<Product>> GetRelatedAsync(
+        int productId,
+        int categoryId,
+        int take = 4,
+        CancellationToken cancellationToken = default)
+    {
+        // Kẹp y như pageSize: tham số này hôm nay do Controller truyền hằng số, nhưng
+        // một hằng số hôm nay là một giá trị từ query string ngày mai.
+        take = Math.Clamp(take, 1, 12);
+
+        return await _context.Products
+            .Include(p => p.Category)
+            .AsNoTracking()
+            // Trừ chính sản phẩm đang xem: gợi ý người ta quay lại đúng trang họ
+            // đang đứng là lỗi không ai báo, chỉ trông rất ngớ ngẩn.
+            .Where(p => p.CategoryId == categoryId && p.Id != productId)
+            // Còn hàng lên trước. EF Core dịch biểu thức bool này thành
+            // `ORDER BY CASE WHEN [p].[Stock] > 0 THEN 1 ELSE 0 END DESC` - việc sắp
+            // xếp xảy ra dưới SQL Server, trước khi TOP cắt bớt. Sắp trong C# sau
+            // ToListAsync thì thứ tự chỉ đúng TRONG 4 dòng đã bị cắt sai.
+            .OrderByDescending(p => p.Stock > 0)
+            .ThenBy(p => p.Name)
+            // Tie-breaker BẮT BUỘC: hai sản phẩm cùng tình trạng hàng và trùng tên
+            // thì SQL Server được tự do trả về thứ tự khác nhau giữa các lần chạy,
+            // và TOP 4 sẽ cắt ra hai bộ khác nhau.
+            .ThenBy(p => p.Id)
+            .Take(take)
             .ToListAsync(cancellationToken);
     }
 

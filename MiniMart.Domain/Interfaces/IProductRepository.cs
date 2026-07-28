@@ -11,6 +11,7 @@ public interface IProductRepository
     /// </summary>
     Task<PagedResult<Product>> GetProductsAsync(
         int? categoryId = null,
+        string? search = null,
         decimal? minPrice = null,
         decimal? maxPrice = null,
         int page = 1,
@@ -33,6 +34,28 @@ public interface IProductRepository
     /// </summary>
     Task<List<Product>> GetByIdsAsync(
         IEnumerable<int> ids,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Vài sản phẩm CÙNG DANH MỤC để gợi ý ở cuối trang chi tiết, trừ chính sản
+    /// phẩm đang xem.
+    ///
+    /// <para>
+    /// Sản phẩm CÒN HÀNG được xếp lên trước: gợi ý một món không mua được là gợi ý
+    /// vô ích. Đây là quy tắc nghiệp vụ nhưng nó được diễn đạt bằng <c>ORDER BY</c>,
+    /// nên chỗ đúng của nó là truy vấn — kéo hết danh mục về rồi sắp trong C# là
+    /// đúng cùng con số trên màn hình với một hoá đơn database khác hẳn.
+    /// </para>
+    /// <para>
+    /// <c>Take</c> cần tie-breaker duy nhất y hệt <c>Skip</c>/<c>Take</c> của phân
+    /// trang: thiếu nó thì hai lần tải cùng một trang có thể ra hai bộ gợi ý khác
+    /// nhau, và không có gì báo lỗi.
+    /// </para>
+    /// </summary>
+    Task<List<Product>> GetRelatedAsync(
+        int productId,
+        int categoryId,
+        int take = 4,
         CancellationToken cancellationToken = default);
 
     /// <summary>

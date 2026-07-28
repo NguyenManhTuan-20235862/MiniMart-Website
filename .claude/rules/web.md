@@ -90,6 +90,59 @@ xanh**. Phải thêm assertion "vẫn đang ở đúng trang" (`action="/Checkou
 - Địa chỉ là MỘT ô tự do, không tách tỉnh/huyện/xã: tách đúng đòi dữ liệu hành chính thật kèm
   dropdown phụ thuộc nhau, mà danh mục đó còn đổi theo các đợt sáp nhập.
 
+## Trang chi tiết sản phẩm (`/Product/Details/{id}`)
+
+- Giữ **route mặc định**. Gắn `[HttpGet("Product/{id:int}")]` cho URL ngắn `/Product/5`
+  sẽ **TẮT** route mặc định cho chính action đó, nên `/Product/Details/5` chết theo —
+  trong khi `/Order/Details/3` đang dùng dạng dài. Một dự án hai kiểu URL đắt hơn cái
+  URL ngắn mang lại.
+- `id` không tồn tại → **404**, không phải 200 kèm trang trống: 200 là mời công cụ tìm
+  kiếm lập chỉ mục một trang rỗng, và người dùng không phân biệt được "không có thứ này"
+  với "trang bị lỗi". `id` không parse được cho ra `0` nên đi chung nhánh đó.
+
+### ★ Ô nhập số lượng là chỗ dễ làm lộ tồn kho nhất trong cả dự án
+Quy ước "chỉ hiện trạng thái còn/hết hàng" ở trên áp cho trang này gắt hơn mọi trang khác,
+vì phản xạ tự nhiên khi làm ô số lượng là `max="@Model.Product.Stock"` — và thế là bảng
+tồn kho của **toàn shop** nằm sẵn trong HTML cho bất kỳ ai chạy một vòng `curl`.
+
+| | |
+|---|---|
+| Trần trong HTML | `max="100"` — đúng trần của `AddToCartRequest.[Range(1, 100)]` |
+| Giới hạn thật theo tồn kho | `CartService` kẹp, kèm thông báo |
+
+⚠ Phải nói rõ một điều để quy ước không bị hiểu là tuyệt đối: thông báo của `CartService`
+là *"chỉ còn {Stock}"*, nên con số **vẫn lộ** — chỉ khác là lộ khi khách chủ động thử mua
+nhiều hơn số có. Đó là tiết lộ **theo yêu cầu để giải thích một hành động**, không phải
+xuất bản trên mọi lượt xem. Đã mutation test: đổi `max="100"` thành `max="@…Stock"` → 1 đỏ.
+
+### Link sang trang chi tiết bọc ẢNH và TÊN, không bọc cả thẻ
+`_ProductCard` chứa `<form>` thêm vào giỏ, mà **`<form>` lồng trong `<a>` là HTML không
+hợp lệ**: trình duyệt tự sửa cây DOM theo cách của nó và nút bấm hỏng theo những kiểu khó
+đoán. Badge danh mục cũng cố ý nằm ngoài `<a>` — nó chồng lên ảnh nên bấm vào nó mà nhảy
+trang là đúng thứ người dùng KHÔNG mong đợi.
+
+⚠ Bài học test đắt nhất của phase này: bản đầu của test chống lồng thẻ dùng regex
+`<a\b[^>]*>(.*?)</a>` rồi tìm `<form` trong nhóm bắt được, và nó **LỌT** mutation "bọc cả
+thẻ trong `<a>`" — vì non-greedy nên với `<a>` ngoài cùng nó khớp tới `</a>` **đầu tiên**
+(của link ảnh bên trong) và không bao giờ nhìn thấy `<form>`. Regex không đếm được cấu
+trúc lồng nhau. Phải **đếm độ sâu** bằng cách quét `<a` / `</a>` / `<form`.
+
+### Gợi ý "sản phẩm tương tự"
+- Truy vấn ở Repository, không `Include` rồi lọc trong C#: cùng nguyên tắc read model ở
+  `data-access.md`.
+- **Sản phẩm còn hàng xếp lên trước** (`OrderByDescending(p => p.Stock > 0)`), vì gợi ý
+  một món không mua được là gợi ý vô ích. Đây là loại sai không có triệu chứng: trang vẫn
+  hiện đủ bốn thẻ, chỉ là một thẻ vô dụng. Dữ liệu test phải có một món hết hàng đứng
+  **đầu bảng chữ cái**, nếu không mutation "chỉ `OrderBy(Name)`" sẽ lọt.
+- `Take` cần **tie-breaker duy nhất** y hệt `Skip`/`Take` của phân trang.
+- Danh sách rỗng (danh mục chỉ có đúng sản phẩm đang xem) là kết cục **bình thường**:
+  view không render khu vực đó. Hiện tiêu đề "Sản phẩm tương tự" trên một khoảng trắng
+  tệ hơn không hiện gì.
+- ⚠ Khu gợi ý cũng render `_ProductCard`, tức cũng có `/Cart/Add` của riêng nó. Test về
+  sản phẩm ĐANG XEM phải **bóc riêng khối chính** trước khi assert — quét cả trang thì
+  "hết hàng không có nút thêm vào giỏ" đỏ dù code đúng, và tệ hơn, chiều ngược lại sẽ
+  **xanh** kể cả khi nút của sản phẩm chính biến mất.
+
 ## Bảng sửa hàng loạt — đặt tên input và đánh dấu dòng hỏng
 
 - Chỉ số `Items[i]` phải **liên tục từ 0**. Binder đọc `Items[0]`, `Items[1]`… và **dừng

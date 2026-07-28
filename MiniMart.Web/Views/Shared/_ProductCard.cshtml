@@ -10,23 +10,35 @@
 <div class="col">
     <div class="card h-100 shadow-sm">
 
-        @* Vùng ảnh *@
+        @*
+            Vùng ảnh. Link sang trang chi tiết bọc ẢNH, không bọc cả thẻ: bên dưới
+            có <form> thêm vào giỏ, mà <form> lồng trong <a> là HTML không hợp lệ —
+            trình duyệt sẽ tự sửa cây DOM theo cách của nó và nút bấm hỏng theo
+            những kiểu khó đoán.
+
+            Badge danh mục cố ý nằm NGOÀI <a>: nó chồng lên ảnh nên bấm vào nó mà
+            ra trang sản phẩm là đúng thứ người dùng KHÔNG mong đợi.
+        *@
         <div class="es-product-img-wrap">
-            @if (string.IsNullOrEmpty(Model.ImageUrl))
-            {
-                <div class="es-product-img-placeholder">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <rect x="3" y="3" width="18" height="18" rx="3"/>
-                        <circle cx="8.5" cy="8.5" r="1.5"/>
-                        <polyline points="21,15 16,10 5,21"/>
-                    </svg>
-                    <span style="font-size:0.75rem;">Chưa có ảnh</span>
-                </div>
-            }
-            else
-            {
-                <img src="@Model.ImageUrl" alt="@Model.Name" />
-            }
+            <a asp-area="" asp-controller="Product" asp-action="Details"
+               asp-route-id="@Model.Id" class="es-product-img-link"
+               aria-label="Xem chi tiết @Model.Name">
+                @if (string.IsNullOrEmpty(Model.ImageUrl))
+                {
+                    <div class="es-product-img-placeholder">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="3" width="18" height="18" rx="3"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21,15 16,10 5,21"/>
+                        </svg>
+                        <span style="font-size:0.75rem;">Chưa có ảnh</span>
+                    </div>
+                }
+                else
+                {
+                    <img src="@Model.ImageUrl" alt="@Model.Name" />
+                }
+            </a>
 
             @* Badge danh mục nổi trên ảnh *@
             @if (Model.Category is not null)
@@ -36,52 +48,46 @@
         </div>
 
         @* Body *@
-        <div class="es-product-body">
-            <h6 class="es-product-name">@Model.Name</h6>
+        <div class="es-product-body p-3 d-flex flex-column h-100">
+            <h6 class="es-product-name fw-bold mb-1" style="font-size: 0.95rem;">
+                <a asp-area="" asp-controller="Product" asp-action="Details"
+                   asp-route-id="@Model.Id" class="text-dark text-decoration-none es-product-name-link">@Model.Name</a>
+            </h6>
 
-            @* ToMoneyText() khoá vào InvariantCulture: cùng một con số ra cùng
-               một chuỗi bất kể locale của máy chạy server. *@
-            <p class="es-product-price">
-                @Model.Price.ToMoneyText()<small> đ</small>
-            </p>
+            <div class="es-product-price text-danger fw-extrabold mb-2" style="font-size: 1.15rem; color: #DC2626 !important;">
+                @Model.Price.ToMoneyText()<span class="ms-1" style="font-size: 0.85rem; font-weight: 600;">đ</span>
+            </div>
 
-            @* Chỉ hiện TRẠNG THÁI còn/hết hàng, không hiện con số tồn kho —
-               số lượng hàng tồn là thông tin kinh doanh. *@
-            @if (Model.Stock == 0)
-            {
-                <span class="es-badge-out-stock">
-                    <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true">
-                        <circle cx="4" cy="4" r="4"/>
-                    </svg>
-                    Hết hàng
-                </span>
-            }
-            else
-            {
-                <span class="es-badge-in-stock">
-                    <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor" aria-hidden="true">
-                        <circle cx="4" cy="4" r="4"/>
-                    </svg>
-                    Còn hàng
-                </span>
+            <div class="mt-auto">
+                @if (Model.Stock == 0)
+                {
+                    <div class="mb-2">
+                        <span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2 py-1 small">
+                            &bull; Hết hàng
+                        </span>
+                    </div>
 
-                @*
-                    Vẫn là form POST thường và VẪN chạy khi tắt JavaScript: CartController
-                    nhận cả request AJAX và form thường (Post-Redirect-Get). Form tag
-                    helper tự chèn antiforgery token khi có asp-action.
-
-                    data-cart-add chỉ là dấu để cart-dropdown.js chặn submit và gửi bằng
-                    fetch. Không có JS thì thuộc tính này vô nghĩa và form submit như cũ —
-                    đó là progressive enhancement, không phải hai đường code song song.
-                *@
-                <form asp-area="" asp-controller="Cart" asp-action="Add" method="post" data-cart-add>
-                    <input type="hidden" name="ProductId" value="@Model.Id" />
-                    <input type="hidden" name="Quantity" value="1" />
-                    <button type="submit" class="es-btn-add-cart">
+                    <button type="button" class="btn btn-secondary w-100 fw-semibold rounded-2 py-2" disabled style="background-color: #E2E8F0; border-color: #CBD5E1; color: #94A3B8; cursor: not-allowed;">
                         Thêm vào giỏ
                     </button>
-                </form>
-            }
+                }
+                else
+                {
+                    <div class="mb-2">
+                        <span class="badge rounded-pill bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 small" style="background-color: #E6F4EA !important; color: #10B981 !important;">
+                            &bull; Còn hàng
+                        </span>
+                    </div>
+
+                    <form asp-area="" asp-controller="Cart" asp-action="Add" method="post" data-cart-add>
+                        <input type="hidden" name="ProductId" value="@Model.Id" />
+                        <input type="hidden" name="Quantity" value="1" />
+                        <button type="submit" class="btn btn-primary w-100 fw-semibold rounded-2 py-2 es-btn-add-cart" style="background-color: #2563EB; border-color: #2563EB;">
+                            Thêm vào giỏ
+                        </button>
+                    </form>
+                }
+            </div>
         </div>
     </div>
 </div>
