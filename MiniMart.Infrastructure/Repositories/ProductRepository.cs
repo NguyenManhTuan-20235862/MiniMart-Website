@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MiniMart.Common;
 using MiniMart.Domain.Entities;
 using MiniMart.Domain.Interfaces;
+using MiniMart.Domain.ValueObjects;
 using MiniMart.Infrastructure.Data;
 
 namespace MiniMart.Infrastructure.Repositories;
@@ -181,6 +182,74 @@ public class ProductRepository : IProductRepository
             // và TOP 4 sẽ cắt ra hai bộ khác nhau.
             .ThenBy(p => p.Id)
             .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Collation dùng riêng cho việc TÌM KIẾM, không đổi collation của cột.
+    ///
+    /// <para>
+    /// <c>CI</c> = không phân biệt hoa/thường, <c>AI</c> = <b>không phân biệt dấu</b>.
+    /// Database đang dùng <c>SQL_Latin1_General_CP1_CI_AS</c> — chữ <c>AS</c> cuối
+    /// nghĩa là CÓ phân biệt dấu, nên `LIKE N'%chuot%'` trả về 0 dòng trong khi shop
+    /// đang bán "Chuột Logitech MX Master 3S". Đã đo trực tiếp bằng sqlcmd.
+    /// </para>
+    /// <para>
+    /// ⚠ Đánh đổi phải biết: ép collation trong <c>WHERE</c> làm biểu thức không còn
+    /// <i>sargable</i> — SQL Server không dùng được index trên <c>Name</c> nữa và phải
+    /// quét bảng. Với quy mô hiện tại (50 sản phẩm) thì không đáng bàn. Khi kho lớn
+    /// lên, cách đúng là thêm một cột tính toán đã chuẩn hoá (persisted) mang sẵn
+    /// collation này rồi đánh index lên nó — KHÔNG phải bỏ lệnh ép collation đi.
+    /// </para>
+    /// </summary>
+    private const string KieuSoSanhTimKiem = "Vietnamese_CI_AI";
+
+    /// <summary>Dưới ngưỡng này thì gợi ý là nhiễu chứ không phải trợ giúp.</summary>
+    private const int DoDaiToiThieu = 2;
+
+    public async Task<List<ProductSuggestion>> SuggestAsync(
+        string? tuKhoa,
+        int take = 8,
+        CancellationToken cancellationToken = default)
+    {
+        var kw = tuKhoa?.Trim() ?? string.Empty;
+
+        // Trả rỗng thay vì trả cả kho: một ký tự khớp gần như mọi thứ, và dropdown
+        // 8 dòng ngẫu nhiên thì tệ hơn là không có dropdown nào.
+        if (kw.Length < DoDaiToiThieu)
+        {
+            return [];
+        }
+
+        take = Math.Clamp(take, 1, 20);
+
+        // Ghép chuỗi TRƯỚC khi vào cây biểu thức. Viết `" " + kw` ngay trong truy vấn
+        // thì EF phải dịch phép nối chuỗi sang SQL - chạy được, nhưng đây là hằng số
+        // đối với câu truy vấn nên tính sẵn vừa rõ vừa tham số hoá được.
+        var kwSauKhoangTrang = " " + kw;
+
+        return await _context.Products
+            .AsNoTracking()
+            .Where(p => EF.Functions.Collate(p.Name, KieuSoSanhTimKiem).Contains(kw))
+            // ── Xếp hạng "giống nhất lên trước" ───────────────────────────────────
+            // Biểu thức ba nhánh này được EF dịch thành CASE WHEN trong ORDER BY, nên
+            // việc sắp xếp xảy ra DƯỚI SQL Server - trước khi TOP cắt bớt. Sắp trong
+            // C# sau ToListAsync thì thứ tự chỉ đúng trong 8 dòng đã bị cắt sai.
+            .OrderBy(p =>
+                EF.Functions.Collate(p.Name, KieuSoSanhTimKiem).StartsWith(kw) ? 0
+                : EF.Functions.Collate(p.Name, KieuSoSanhTimKiem).Contains(kwSauKhoangTrang) ? 1
+                : 2)
+            // Đồng hạng thì tên NGẮN hơn lên trước: từ khoá chiếm tỉ lệ lớn hơn trong
+            // một tên ngắn nên nó "giống" hơn theo cảm nhận của người gõ.
+            .ThenBy(p => p.Name.Length)
+            .ThenBy(p => p.Name)
+            // Tie-breaker duy nhất, BẮT BUỘC với Take y như với Skip/Take: thiếu nó
+            // thì hai lần gõ cùng một từ khoá có thể ra hai danh sách khác nhau.
+            .ThenBy(p => p.Id)
+            .Take(take)
+            // Chiếu NGAY trong truy vấn: Stock và RowVersion không rời khỏi database.
+            .Select(p => new ProductSuggestion(
+                p.Id, p.Name, p.Price, p.ImageUrl, p.Category.Name, p.Stock > 0))
             .ToListAsync(cancellationToken);
     }
 

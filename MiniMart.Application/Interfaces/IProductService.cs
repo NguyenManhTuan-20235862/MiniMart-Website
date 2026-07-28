@@ -1,6 +1,7 @@
 using MiniMart.Application.Models;
 using MiniMart.Common;
 using MiniMart.Domain.Entities;
+using MiniMart.Domain.ValueObjects;
 
 namespace MiniMart.Application.Interfaces;
 
@@ -40,6 +41,21 @@ public interface IProductService
         int productId,
         int categoryId,
         int take = 4,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gợi ý cho ô tìm kiếm ở header — vài sản phẩm khớp nhất, xếp theo mức độ giống
+    /// GIẢM DẦN (khớp đầu tên → khớp đầu một từ → khớp ở giữa; đồng hạng thì tên ngắn
+    /// hơn lên trước). Không phân biệt hoa/thường và **không phân biệt dấu**.
+    ///
+    /// <para>
+    /// Từ khoá quá ngắn thì trả về danh sách RỖNG chứ không trả cả kho — đó là kết cục
+    /// bình thường, không phải lỗi.
+    /// </para>
+    /// </summary>
+    Task<List<ProductSuggestion>> SuggestAsync(
+        string? tuKhoa,
+        int take = 8,
         CancellationToken cancellationToken = default);
 
     /// <summary>

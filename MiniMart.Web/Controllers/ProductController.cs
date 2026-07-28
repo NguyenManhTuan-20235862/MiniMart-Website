@@ -31,6 +31,36 @@ public class ProductController : Controller
         _productService = productService;
     }
 
+    /// <summary>Số dòng tối đa trong dropdown gợi ý.</summary>
+    private const int SoGoiY = 8;
+
+    /// <summary>
+    /// Gợi ý cho ô tìm kiếm ở header, trả về HTML của danh sách gợi ý.
+    ///
+    /// <para>
+    /// <b>PartialView chứ không Json</b>, theo quy ước mặc định của dự án — và ở đây
+    /// nó đặc biệt đúng: thứ được trả về là TÊN SẢN PHẨM, và nó sẽ được nhét thẳng vào
+    /// DOM. Với Razor thì việc escape xảy ra ở server và không thể quên; với JSON thì
+    /// JSON <b>không</b> escape ký tự <c>&lt;</c>, nên trách nhiệm escape rơi vào
+    /// JavaScript và quên một trường là XSS. Đổi lại, markup dòng gợi ý chỉ tồn tại
+    /// một chỗ duy nhất và <b>kiểm được bằng integration test</b>.
+    /// </para>
+    /// <para>
+    /// Không <c>[Authorize]</c>: tìm kiếm là việc của mọi người.
+    /// </para>
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> Suggest(
+        string? tuKhoa,
+        CancellationToken cancellationToken = default)
+    {
+        // Từ khoá quá ngắn -> Service trả rỗng -> partial render ra chuỗi rỗng. Đó là
+        // kết cục BÌNH THƯỜNG, không phải lỗi, nên vẫn là 200.
+        var goiY = await _productService.SuggestAsync(tuKhoa, SoGoiY, cancellationToken);
+
+        return PartialView("_ProductSuggestions", goiY);
+    }
+
     /// <summary>
     /// Trang chi tiết một sản phẩm: <c>/Product/Details/5</c>.
     ///
