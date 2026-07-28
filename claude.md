@@ -57,6 +57,8 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 
 | Viết thế này | Chuyện xảy ra |
 |---|---|
+| `<form>` của bộ lọc bao luôn cả lưới sản phẩm | **Form lồng trong form.** Trình duyệt VỨT BỎ thẻ `<form>` bên trong, nút "Thêm vào giỏ" của thẻ ĐẦU TIÊN rơi vào form lọc (`get /`) → bấm chỉ chạy lại bộ lọc, không thêm gì vào giỏ. **Chuỗi HTML server gửi đi hoàn toàn đúng**, nên chỉ test chạy trong trình duyệt thật mới thấy |
+| Dropdown có nút bấm mà thiếu `data-bs-auto-close="outside"` | Mặc định Bootstrap đóng menu khi bấm **bên trong** → sập ngay lần bấm đầu, và nhánh JS `if (container.classList.contains('show'))` không bao giờ chạy nên dòng vừa xoá vẫn nằm lại DOM |
 | `ToString("N0")` thay `MoneyFormat.ToMoneyText()` | Máy en-US in `111,000`, máy vi-VN in `111.000` |
 | `asp-for` cho `byte[] RowVersion` **thiếu `type="hidden"`** | Render ra `"System.Byte[]"`, concurrency biến mất (có `type="hidden"` thì lại đúng — đã đo) |
 | Server sửa một giá trị mà quên `ModelState.Remove` | `asp-for` vẫn render giá trị BẬY của người dùng |
@@ -133,6 +135,7 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 - dotnet run --project MiniMart.Web --launch-profile http
 - ./scripts/test-vnpay-ipn.ps1 -OrderId &lt;id&gt; -Reset   ← giả lập VNPay gọi IPN vào app đang chạy
 - dotnet run --project scripts/SeedDuLieuMau -- --xac-nhan   ← **XOÁ SẠCH** rồi nạp lại dữ liệu mẫu
+- pwsh MiniMart.Tests/bin/Debug/net10.0/playwright.ps1 install chromium   ← **máy mới chạy MỘT lần**
 - dotnet ef migrations add <TenMigration> -p MiniMart.Infrastructure -s MiniMart.Web
 - dotnet ef database update -p MiniMart.Infrastructure -s MiniMart.Web
 
@@ -164,13 +167,6 @@ mà quên script là lỗi build, không phải một script hỏng âm thầm.
   cần cập nhật cả bảng bằng AJAX, và nó có test. Đừng xoá mà cũng đừng tưởng nó đang chạy.
 
 ### Nợ thật, chưa trả
-- **Hai file JS KHÔNG có test chạy thật** (`home-load-more.js`, `cart-dropdown.js`) — dự án
-  chưa có headless browser (Playwright). Kiểm chứng được: HTML mà endpoint trả về, hình
-  dạng JSON, header `X-Next-Page`/`X-Cart-Count`, sự tồn tại của từng hook `data-*`
-  (integration test), cú pháp JS (`node --check`). **Chưa** kiểm chứng được: `fetch` chạy
-  thật, `insertAdjacentHTML`/`textContent` cập nhật đúng node, cờ chặn double-click, cờ
-  `canDungLai` của dropdown, việc gỡ node khi xoá dòng. Đây là khoảng trống test lớn nhất
-  còn lại; thêm Playwright đáng một phase riêng.
 - **CI chưa từng chạy thật.** File `.github/workflows/ci.yml` đã viết nhưng chỉ xác nhận
   được phần chạy được ở local (`dotnet format --verify-no-changes` sạch, `dotnet test` xanh).
   Service container SQL Server, `sqlcmd` trong image `mssql/server:2022-latest`, và
@@ -233,6 +229,11 @@ mà quên script là lỗi build, không phải một script hỏng âm thầm.
   thái nào là đoán, cùng lý do đã hoãn API transaction cho tới đúng lúc cần.
 
 ### Đã trả (giữ lại để không ai "sửa" ngược)
+- ~~Hai file JS không có test chạy thật~~ → đã làm ở Phase 11 bằng **Playwright (bản .NET)**.
+  16 test chạy trong Chromium thật, cùng một lệnh `dotnet test`. Máy mới phải chạy một lần:
+  `pwsh MiniMart.Tests/bin/Debug/net10.0/playwright.ps1 install chromium`.
+  📌 Ngay lần chạy đầu tiên nó tìm ra **hai lỗi thật mà 591 test cũ không thấy** — xem hai
+  dòng đầu bảng "bẫy im lặng". Đó là bằng chứng chạy thật cho lý do phase này đáng làm.
 - ~~Round-trip RowVersion~~ → đã làm, xem `.claude/rules/concurrency.md`.
 - ~~3 lỗ hổng auth~~ → đã vá cả ba, xem `.claude/rules/auth.md`.
 - ~~`Directory.Packages.props`, `.editorconfig`, CI~~ → đã có, xem `.claude/rules/build.md`.

@@ -52,6 +52,20 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="Moq" Version="4.20.72" />
+
+    <!--
+      Trình duyệt thật cho hai file JavaScript mà không test nào chạm tới được:
+      home-load-more.js và cart-dropdown.js.
+
+      Chọn bản .NET (Microsoft.Playwright) chứ KHÔNG phải @playwright/test của Node:
+      giữ được MỘT lệnh `dotnet test` cho cả bộ, dùng chung được helper đăng nhập và
+      khuôn dọn dữ liệu đã có, và không phải thêm một hệ sinh thái thứ hai vào CI.
+      Đánh đổi đã biết: mất trace viewer và cơ chế auto-wait phong phú của bản Node.
+
+      ⚠ Package này KHÔNG tự tải trình duyệt về. Phải chạy một lần:
+          pwsh MiniMart.Tests/bin/Debug/net10.0/playwright.ps1 install chromium
+    -->
+    <PackageVersion Include="Microsoft.Playwright" Version="1.61.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>

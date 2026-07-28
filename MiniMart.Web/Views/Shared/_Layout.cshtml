@@ -93,8 +93,27 @@
 
                         @* Giỏ hàng dropdown *@
                         <li class="nav-item dropdown">
+                            @*
+                                ★ data-bs-auto-close="outside" là BẮT BUỘC, không phải tuỳ chọn.
+
+                                Mặc định của Bootstrap là "true" = đóng khi bấm cả BÊN
+                                TRONG lẫn bên ngoài menu. Với một dropdown chỉ để xem thì
+                                đúng, nhưng dropdown này có nút +/−/xoá, nên mặc định đó
+                                làm menu sập ngay lần bấm đầu — không ai sửa được số lượng
+                                thành 3.
+
+                                Nó còn vô hiệu hoá một nhánh của cart-dropdown.js: nhánh
+                                dựng lại dropdown khi giỏ đổi CẤU TRÚC chỉ chạy khi
+                                `container.classList.contains('show')`. Menu vừa bị đóng thì
+                                điều kiện đó false, nên dòng vừa xoá vẫn nằm lại trong DOM.
+                                Đã đo trong Chromium thật: bấm "−" từ 1 về 0 mà vẫn còn 1
+                                phần tử [data-cart-line].
+
+                                "outside" giữ nguyên hành vi đóng khi bấm ra ngoài.
+                            *@
                             <a class="nav-link es-cart-link position-relative d-flex align-items-center gap-1" href="#" role="button"
-                               id="cartDropdownToggle" data-bs-toggle="dropdown" aria-expanded="false"
+                               id="cartDropdownToggle" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                               aria-expanded="false"
                                aria-label="Giỏ hàng">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
                                      viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
