@@ -10,6 +10,9 @@ public class HomeIndexViewModel
     /// <summary>Danh sách danh mục để dựng bộ lọc.</summary>
     public required IReadOnlyList<Category> Categories { get; init; }
 
-    /// <summary>Danh mục đang được chọn; null = xem tất cả. Dùng để giữ trạng thái form.</summary>
-    public int? SelectedCategoryId { get; init; }
+    /// <summary>
+    /// Bộ lọc đang áp dụng. Cùng type mà ProductController.LoadMore nhận, nên
+    /// view lấy được đủ giá trị để dựng lại URL trang sau qua data-*.
+    /// </summary>
+    public required ProductFilter Filter { get; init; }
 }

@@ -3,59 +3,157 @@
     ViewData["Title"] = "Sản phẩm";
 }
 
-<h1 class="h3 mb-4">Sản phẩm</h1>
+@* Tiêu đề trang *@
+<div class="mb-4">
+    <h1 class="es-section-title font-extrabold text-dark mb-1" style="font-size: 2rem; color: #0F172A;">Sản phẩm</h1>
+    <p class="es-section-subtitle text-secondary mb-0" style="font-size: 0.95rem; max-width: 650px; line-height: 1.5;">
+        Khám phá các thiết bị điện tử chính hãng với thiết kế hiện đại và công nghệ tiên phong, cam kết mức giá tốt nhất thị trường.
+    </p>
+</div>
 
-@* Form lọc dùng GET chứ không POST: kết quả lọc phải nằm trong URL để người
-   dùng bookmark, chia sẻ link, và bấm Back/Refresh không bị hỏi gửi lại form. *@
-<form method="get" asp-action="Index" class="row g-2 align-items-end mb-4">
-    <div class="col-auto">
-        <label for="categoryId" class="form-label">Danh mục</label>
-        <select id="categoryId" name="categoryId" class="form-select">
-            <option value="">-- Tất cả --</option>
-            @foreach (var category in Model.Categories)
+@if (!ViewData.ModelState.IsValid)
+{
+    <div asp-validation-summary="All" class="alert alert-warning mb-4"></div>
+}
+
+<form method="get" asp-action="Index" id="filterForm">
+    @if (!string.IsNullOrWhiteSpace(Model.Filter.Search))
+    {
+        <input type="hidden" name="search" value="@Model.Filter.Search" />
+    }
+    <div class="row g-4">
+        @* Cột trái Sidebar: Bộ lọc & Danh mục giống hình 1 *@
+        <div class="col-lg-3 col-md-4">
+            <div class="d-flex flex-column gap-4">
+
+                @* Card 1: Danh mục *@
+                <div class="card border-0 shadow-sm p-3 rounded-3" style="background-color: #F1F5F9;">
+                    <div class="mb-3">
+                        <h6 class="fw-bold text-dark mb-0" style="font-size: 1rem;">Danh mục</h6>
+                        <span class="text-secondary small">ElectroShop Catalog</span>
+                    </div>
+
+                    @* Cụm nút Danh mục trực quan kiểu Image 1 *@
+                    <div class="d-flex flex-column gap-1 mb-3">
+                        <a asp-action="Index" asp-route-search="@Model.Filter.Search" asp-route-minPrice="@Model.Filter.MinPriceText" asp-route-maxPrice="@Model.Filter.MaxPriceText"
+                           class="btn text-start d-flex align-items-center gap-2 rounded-2 py-2 px-3 fw-semibold @(string.IsNullOrEmpty(Model.Filter.CategoryId?.ToString()) ? "btn-primary text-white" : "btn-light text-dark bg-white border-0")"
+                           style="@(string.IsNullOrEmpty(Model.Filter.CategoryId?.ToString()) ? "background-color: #2563EB; border-color: #2563EB;" : "")">
+                            <span class="fs-6">🔲</span> Tất cả sản phẩm
+                        </a>
+
+                        @foreach (var category in Model.Categories)
+                        {
+                            var isSelected = category.Id == Model.Filter.CategoryId;
+                            var icon = category.Name.Contains("Điện thoại") ? "📱" :
+                                       category.Name.Contains("bảng") ? "📱" :
+                                       category.Name.Contains("Laptop") ? "💻" :
+                                       category.Name.Contains("Phụ kiện") ? "🎧" : "📦";
+
+                            <a asp-action="Index" asp-route-categoryId="@category.Id" asp-route-search="@Model.Filter.Search" asp-route-minPrice="@Model.Filter.MinPriceText" asp-route-maxPrice="@Model.Filter.MaxPriceText"
+                               class="btn text-start d-flex align-items-center gap-2 rounded-2 py-2 px-3 fw-medium @(isSelected ? "btn-primary text-white" : "btn-light text-dark bg-white border-0")"
+                               style="@(isSelected ? "background-color: #2563EB; border-color: #2563EB;" : "")">
+                                <span class="fs-6">@icon</span> @category.Name
+                            </a>
+                        }
+                    </div>
+
+                    @* Select dropdown ẩn/hiện vừa đảm bảo test vừa hỗ trợ tương thích *@
+                    <div class="mt-2">
+                        <select id="categoryId" name="categoryId" class="form-select form-select-sm bg-white" onchange="this.form.submit()">
+                            <option value="">-- Tất cả --</option>
+                            @foreach (var category in Model.Categories)
+                            {
+                                <option value="@category.Id" selected="@(category.Id == Model.Filter.CategoryId)">
+                                    @category.Name
+                                </option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                @* Card 2: Khoảng giá *@
+                <div class="card border-0 shadow-sm p-3 rounded-3" style="background-color: #F1F5F9;">
+                    <h6 class="fw-bold text-dark text-uppercase small tracking-wider mb-3">Khoảng giá (đ)</h6>
+
+                    <div class="mb-3">
+                        <label for="minPrice" class="form-label text-secondary small fw-bold mb-1">TỪ</label>
+                        <input type="number" id="minPrice" name="minPrice" class="form-control bg-white"
+                               value="@Model.Filter.MinPriceText" min="0" step="1000" placeholder="0" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="maxPrice" class="form-label text-secondary small fw-bold mb-1">ĐẾN</label>
+                        <input type="number" id="maxPrice" name="maxPrice" class="form-control bg-white"
+                               value="@Model.Filter.MaxPriceText" min="0" step="1000" placeholder="Không giới hạn" />
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary fw-semibold py-2 rounded-2 es-btn-filter" style="background-color: #2563EB; border-color: #2563EB;">
+                            🪠 Lọc kết quả
+                        </button>
+
+                        @if (Model.Filter.HasAnyFilter)
+                        {
+                            <a asp-action="Index" class="btn btn-outline-secondary btn-sm py-1 rounded-2 text-center es-btn-clear">✕ Xoá lọc</a>
+                        }
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        @* Cột phải Main: Danh sách sản phẩm *@
+        <div class="col-lg-9 col-md-8">
+
+            @if (Model.Products.TotalCount == 0)
             {
-                @* selected giữ lại lựa chọn sau khi trang tải lại. *@
-                <option value="@category.Id" selected="@(category.Id == Model.SelectedCategoryId)">
-                    @category.Name
-                </option>
+                <div class="es-empty-state bg-white rounded-3 p-5 text-center shadow-sm my-3">
+                    <div class="es-empty-state-icon text-muted mb-3" style="font-size: 3.5rem; opacity: 0.3;">📦</div>
+                    <h5 class="fw-bold text-dark mb-2">Không tìm thấy sản phẩm nào@(Model.Filter.HasAnyFilter ? " khớp với bộ lọc" : "")</h5>
+                    <p class="text-secondary small mb-3">Vui lòng thử lại với khoảng giá khác hoặc xoá bộ lọc.</p>
+                    @if (Model.Filter.HasAnyFilter)
+                    {
+                        <a asp-action="Index" class="btn btn-primary px-4 py-2 rounded-2 fw-semibold es-btn-clear" style="background-color: #2563EB;">✕ Xoá bộ lọc</a>
+                    }
+                </div>
             }
-        </select>
-    </div>
-    <div class="col-auto">
-        <button type="submit" class="btn btn-primary">Lọc</button>
-        @if (Model.SelectedCategoryId is not null)
-        {
-            <a asp-action="Index" class="btn btn-link">Xoá lọc</a>
-        }
+            else
+            {
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <p class="es-product-count text-secondary small mb-0">
+                        Hiển thị <span id="shownCount" class="fw-bold text-dark">@Model.Products.Items.Count</span>
+                        / @Model.Products.TotalCount sản phẩm
+                    </p>
+                </div>
+
+                <div id="productGrid" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-3">
+                    @foreach (var product in Model.Products.Items)
+                    {
+                        <partial name="_ProductCard" model="product" />
+                    }
+                </div>
+
+                @if (Model.Products.HasNextPage)
+                {
+                    <div class="es-load-more-wrap text-center mt-4">
+                        <button id="btnLoadMore" type="button" class="btn btn-outline-primary rounded-pill px-4 py-2 fw-semibold es-btn-load-more"
+                                data-category-id="@Model.Filter.CategoryId"
+                                data-search="@Model.Filter.Search"
+                                data-min-price="@Model.Filter.MinPriceText"
+                                data-max-price="@Model.Filter.MaxPriceText"
+                                data-next-page="2"
+                                data-url="@Url.Action("LoadMore", "Product")">
+                            Xem thêm sản phẩm
+                        </button>
+                        <div id="loadMoreError" class="text-danger small mt-2 d-none"></div>
+                    </div>
+                }
+            }
+
+        </div>
     </div>
 </form>
 
-@if (Model.Products.TotalCount == 0)
-{
-    <div class="alert alert-light border">
-        Không tìm thấy sản phẩm nào@(Model.SelectedCategoryId is not null ? " trong danh mục này" : "").
-    </div>
-}
-else
-{
-    <p class="text-muted small">
-        Hiển thị @Model.Products.Items.Count / @Model.Products.TotalCount sản phẩm
-    </p>
-
-    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3">
-        @foreach (var product in Model.Products.Items)
-        {
-            <partial name="_ProductCard" model="product" />
-        }
-    </div>
-
-    @if (Model.Products.HasNextPage)
-    {
-        <div class="text-center mt-4">
-            <button id="btnLoadMore" type="button" class="btn btn-outline-primary"
-                    data-category-id="@Model.SelectedCategoryId" data-next-page="2">
-                Xem thêm
-            </button>
-        </div>
-    }
+@section Scripts {
+    <script src="~/js/home-load-more.js" asp-append-version="true"></script>
 }

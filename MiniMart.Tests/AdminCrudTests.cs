@@ -65,6 +65,7 @@ public class AdminCrudTests : IAsyncLifetime
     [Theory]
     [InlineData("/Admin/Category")]
     [InlineData("/Admin/Product")]
+    [InlineData("/Admin/User")]
     public async Task Nac_danh_khong_vao_duoc_trang_quan_tri(string path)
     {
         using var client = CreateClient();
@@ -91,6 +92,7 @@ public class AdminCrudTests : IAsyncLifetime
     [InlineData("/Admin/Dashboard")]
     [InlineData("/Admin/Category")]
     [InlineData("/Admin/Product")]
+    [InlineData("/Admin/User")]
     public async Task Trang_quan_tri_phai_dung_layout_rieng(string path)
     {
         using var client = await TaoClientAdminAsync();

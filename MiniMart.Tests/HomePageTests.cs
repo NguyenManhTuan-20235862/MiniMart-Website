@@ -144,6 +144,149 @@ public class HomePageTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Loc_theo_gia_toi_thieu()
+    {
+        using var client = CreateClient();
+
+        // Danh mục A: ConHang 111.000, HetHang 222.000.
+        var html = await client.GetStringAsync($"/?categoryId={_danhMucA}&minPrice=200000");
+
+        Assert.Equal(1, DemThe(html));
+        Assert.Contains("HetHang", html);
+        Assert.DoesNotContain("ConHang", html);
+    }
+
+    [Fact]
+    public async Task Loc_theo_gia_toi_da()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync($"/?categoryId={_danhMucA}&maxPrice=150000");
+
+        Assert.Equal(1, DemThe(html));
+        Assert.Contains("ConHang", html);
+        Assert.DoesNotContain("HetHang", html);
+    }
+
+    [Fact]
+    public async Task Loc_dong_thoi_danh_muc_va_khoang_gia()
+    {
+        using var client = CreateClient();
+
+        // Ba điều kiện cùng lúc phải cho ra MỘT câu SQL với 3 AND, không phải
+        // lấy hết rồi lọc trong bộ nhớ.
+        var html = await client.GetStringAsync(
+            $"/?categoryId={_danhMucB}&minPrice=3000&maxPrice=5000");
+
+        // Danh mục B: B01..B15 giá i * 1000 -> 3000..5000 là B03, B04, B05.
+        Assert.Equal(3, DemThe(html));
+        Assert.Contains("B03", html);
+        Assert.Contains("B05", html);
+        Assert.DoesNotContain(">B02<", html);
+        Assert.DoesNotContain(">B06<", html);
+    }
+
+    [Fact]
+    public async Task Gia_da_nhap_duoc_giu_lai_trong_o_input_sau_khi_loc()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync($"/?minPrice=50000&maxPrice=250000");
+
+        // Mất value thì mỗi lần lọc xong hai ô giá lại trắng, người dùng không
+        // biết mình đang lọc theo khoảng nào - đúng vấn đề của dropdown danh mục.
+        Assert.Contains("value=\"50000\"", html);
+        Assert.Contains("value=\"250000\"", html);
+        Assert.Contains("Xoá lọc", html);
+    }
+
+    [Fact]
+    public async Task Chi_loc_gia_khong_chon_danh_muc_van_hien_link_Xoa_loc()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync("/?minPrice=1");
+
+        // HasAnyFilter phải tính cả filter giá. Nếu chỉ xét SelectedCategoryId
+        // thì người lọc theo giá không có cách nào quay về xem tất cả.
+        Assert.Contains("Xoá lọc", html);
+    }
+
+    [Fact]
+    public async Task Khong_loc_gi_thi_khong_hien_link_Xoa_loc()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.DoesNotContain("Xoá lọc", html);
+    }
+
+    [Fact]
+    public async Task Khoang_gia_nguoc_duoc_canh_bao_thay_vi_im_lang_tra_ve_rong()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync("/?minPrice=999000&maxPrice=1000");
+
+        Assert.Equal(0, DemThe(html));
+        Assert.Contains("Khoảng giá không hợp lệ", html);
+    }
+
+    [Fact]
+    public async Task Gia_am_bi_bao_loi_bang_Data_Annotation()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync("/?minPrice=-5");
+
+        // Ràng buộc thuộc về bản thân giá trị -> [Range] trên ProductFilter,
+        // không phải kiểm tra trong Service.
+        Assert.Contains("Giá từ phải là số không âm", html);
+    }
+
+    [Fact]
+    public async Task Text_tieng_Viet_KHONG_bi_encode_thanh_entity()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync("/?minPrice=-5");
+
+        // HtmlEncoder mặc định escape mọi ký tự non-ASCII. Nếu không cấu hình
+        // UnicodeRanges.All thì chuỗi này ra "Gi&#xE1; t&#x1EEB;".
+        Assert.DoesNotContain("&#x1EEB;", html);
+        Assert.DoesNotContain("&#xE1;", html);
+    }
+
+    [Fact]
+    public async Task Nut_Xem_them_mang_theo_toan_bo_bo_loc()
+    {
+        using var client = CreateClient();
+
+        // Danh mục B: 15 sản phẩm, minPrice=2000 -> còn 14 > pageSize 12.
+        var html = await client.GetStringAsync($"/?categoryId={_danhMucB}&minPrice=2000");
+
+        Assert.Contains("btnLoadMore", html);
+        Assert.Contains($"data-category-id=\"{_danhMucB}\"", html);
+        // Thiếu data-min-price thì JS gọi trang 2 mà không có filter giá ->
+        // sản phẩm đã bị loại ở trang 1 lại xuất hiện ở trang 2.
+        Assert.Contains("data-min-price=\"2000\"", html);
+        Assert.Contains("data-next-page=\"2\"", html);
+    }
+
+    [Fact]
+    public async Task Trang_chu_nap_script_LoadMore_khi_con_trang_sau()
+    {
+        using var client = CreateClient();
+
+        var html = await client.GetStringAsync($"/?categoryId={_danhMucB}");
+
+        // Nút render ra mà không có script thì bấm vào không xảy ra gì -
+        // đúng lỗi đã tồn tại trước lượt này.
+        Assert.Contains("home-load-more.js", html);
+    }
+
+    [Fact]
     public async Task Trang_chu_khong_can_dang_nhap()
     {
         using var client = _factory.CreateClient(

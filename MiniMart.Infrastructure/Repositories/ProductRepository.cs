@@ -17,6 +17,7 @@ public class ProductRepository : IProductRepository
 
     public async Task<PagedResult<Product>> GetProductsAsync(
         int? categoryId = null,
+        string? search = null,
         decimal? minPrice = null,
         decimal? maxPrice = null,
         int page = 1,
@@ -40,6 +41,12 @@ public class ProductRepository : IProductRepository
         if (categoryId.HasValue)
         {
             query = query.Where(p => p.CategoryId == categoryId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var keyword = search.Trim();
+            query = query.Where(p => p.Name.Contains(keyword));
         }
 
         if (minPrice.HasValue)
@@ -105,12 +112,100 @@ public class ProductRepository : IProductRepository
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
     }
 
+    public async Task<List<Product>> GetByIdsAsync(
+        IEnumerable<int> ids,
+        CancellationToken cancellationToken = default)
+    {
+        // Vật chất hoá thành mảng trước: `ids` có thể là một IEnumerable lười
+        // (VD kết quả của Select), mà EF Core cần đếm được để dựng câu IN (...).
+        var danhSach = ids as int[] ?? ids.ToArray();
+
+        if (danhSach.Length == 0)
+        {
+            // Tránh gửi "WHERE Id IN ()" xuống DB - vừa vô nghĩa vừa tốn round-trip.
+            return [];
+        }
+
+        return await _context.Products
+            .Include(p => p.Category)
+            .AsNoTracking()
+            // Contains được EF Core dịch thành `WHERE [p].[Id] IN (@p0, @p1, ...)`.
+            .Where(p => danhSach.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<Product>> GetRelatedAsync(
+        int productId,
+        int categoryId,
+        int take = 4,
+        CancellationToken cancellationToken = default)
+    {
+        // Kẹp y như pageSize: tham số này hôm nay do Controller truyền hằng số, nhưng
+        // một hằng số hôm nay là một giá trị từ query string ngày mai.
+        take = Math.Clamp(take, 1, 12);
+
+        return await _context.Products
+            .Include(p => p.Category)
+            .AsNoTracking()
+            // Trừ chính sản phẩm đang xem: gợi ý người ta quay lại đúng trang họ
+            // đang đứng là lỗi không ai báo, chỉ trông rất ngớ ngẩn.
+            .Where(p => p.CategoryId == categoryId && p.Id != productId)
+            // Còn hàng lên trước. EF Core dịch biểu thức bool này thành
+            // `ORDER BY CASE WHEN [p].[Stock] > 0 THEN 1 ELSE 0 END DESC` - việc sắp
+            // xếp xảy ra dưới SQL Server, trước khi TOP cắt bớt. Sắp trong C# sau
+            // ToListAsync thì thứ tự chỉ đúng TRONG 4 dòng đã bị cắt sai.
+            .OrderByDescending(p => p.Stock > 0)
+            .ThenBy(p => p.Name)
+            // Tie-breaker BẮT BUỘC: hai sản phẩm cùng tình trạng hàng và trùng tên
+            // thì SQL Server được tự do trả về thứ tự khác nhau giữa các lần chạy,
+            // và TOP 4 sẽ cắt ra hai bộ khác nhau.
+            .ThenBy(p => p.Id)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<Product?> GetForUpdateAsync(int id, CancellationToken cancellationToken = default)
     {
         // CÓ tracking: Change Tracker phải giữ giá trị RowVersion gốc thì
         // SaveChanges mới kẹp được nó vào WHERE để phát hiện xung đột.
         return await _context.Products
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+    }
+
+    public async Task<List<Product>> GetManyForUpdateAsync(
+        IEnumerable<int> ids,
+        CancellationToken cancellationToken = default)
+    {
+        var danhSach = ids as int[] ?? ids.ToArray();
+
+        if (danhSach.Length == 0)
+        {
+            return [];
+        }
+
+        // CÓ tracking (không AsNoTracking) — khác GetByIdsAsync ở đúng điểm này.
+        // Không có tracking thì Change Tracker không giữ RowVersion gốc, phép trừ
+        // tồn kho không được lưu, và không xung đột nào bị phát hiện.
+        //
+        // Không Include(Category): đường ghi chỉ cần Name, Price, Stock, RowVersion.
+        return await _context.Products
+            .Where(p => danhSach.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+    }
+
+    public void SetExpectedRowVersion(Product product, byte[] rowVersion)
+    {
+        // Ghi vào OriginalValue, KHÔNG phải CurrentValue.
+        //
+        // EF Core sinh câu UPDATE dạng:
+        //     UPDATE Products SET ... WHERE Id = @id AND RowVersion = @original
+        // Giá trị kẹp vào WHERE là OriginalValue. CurrentValue của cột rowversion
+        // do SQL Server tự sinh nên gán vào đó không có tác dụng gì.
+        //
+        // Sau GetForUpdateAsync, OriginalValue = phiên bản HIỆN TẠI trong DB nên
+        // WHERE luôn khớp. Ghi đè bằng phiên bản người dùng thấy lúc mở form thì
+        // WHERE mới trượt được khi có người khác đã sửa ở giữa.
+        _context.Entry(product).Property(p => p.RowVersion).OriginalValue = rowVersion;
     }
 
     public async Task AddAsync(Product product, CancellationToken cancellationToken = default)

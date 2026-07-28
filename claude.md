@@ -11,181 +11,113 @@ Controller → Service → Repository → EF Core/Dapper → SQL Server
 - MiniMart.Common           : Helper, Constants, Custom Exception
 - MiniMart.Tests            : xUnit + Moq (unit test) và WebApplicationFactory (integration test)
 
-## Quy ước code
+## Quy ước code (luôn áp dụng)
 - Controller KHÔNG chứa business logic, chỉ gọi Service.
 - IRepository đặt ở Domain (Domain khai báo thứ nó CẦN từ tầng lưu trữ).
 - IService đặt ở Application, cùng tầng với implementation của nó. Domain giữ thuần nghiệp vụ.
 - Service phụ thuộc IRepository (Domain), không phụ thuộc trực tiếp Infrastructure (DIP).
 - Đặt tên: IProductRepository / ProductRepository, IProductService / ProductService.
 - Toàn bộ thao tác DB dùng async/await, mọi method public nhận CancellationToken.
-
-### Validation — đặt ở đâu
-Tiêu chí phân loại, không phải cảm tính:
-- **Data Annotation** cho ràng buộc thuộc về BẢN THÂN giá trị: bắt buộc nhập, độ dài,
-  khoảng số, định dạng. Đánh giá được mà không cần biết gì ngoài chính giá trị đó.
-- **Service** cho mọi ràng buộc cần một trong ba thứ: truy vấn DB, `async`, hoặc
-  dependency từ DI. Lý do `ValidationAttribute.IsValid` có chữ ký ĐỒNG BỘ — query DB
-  trong đó buộc phải `.GetAwaiter().GetResult()`, gây thread-pool starvation.
-- Ví dụ đã áp dụng: `CategoryId` có `[Range(1, ...)]` để hỏi "đã chọn chưa", còn
-  "danh mục đó có tồn tại không" nằm ở `ProductService.BaoDamDanhMucTonTaiAsync`.
-- Cột tiền tệ: dùng `[Range(typeof(decimal), "0.01", "...", ConvertValueInInvariantCulture = true)]`.
-  Overload `Range(0.01, ...)` nhận `double` nên làm tròn nhị phân; thiếu
-  `ConvertValueInInvariantCulture` thì máy locale vi-VN parse `"0.01"` sai.
-
-### Unit of Work
-- `SaveChangesAsync` nằm ở **IUnitOfWork**, TUYỆT ĐỐI không thêm lại vào Repository.
-  Lý do: mọi Repository dùng chung một DbContext (Scoped), nên SaveChanges trên
-  một Repository thực chất commit thay đổi của tất cả — tên gọi sẽ nói dối.
-- Repository chỉ `AddAsync` / `Remove` / truy vấn. Service gọi `_unitOfWork.SaveChangesAsync()`.
-
-### Đặt tên method truy vấn trong Repository
-- `GetByIdAsync` → `AsNoTracking`, dùng cho đường **đọc** (hiển thị).
-- `GetForUpdateAsync` → **có tracking**, bắt buộc dùng cho đường **sửa**.
-  Entity AsNoTracking sửa xong gọi SaveChanges sẽ không lưu gì, và mất luôn
-  RowVersion gốc nên không phát hiện được xung đột.
-- Truy vấn trả về entity có navigation property phải `Include` đầy đủ.
-
-### Truy vấn có lọc và phân trang
-- Bộ lọc tuỳ chọn: dựng `IQueryable` rồi `if (x.HasValue) query = query.Where(...)`.
-  Nhiều `Where` chồng nhau được dịch thành MỘT câu SQL với `AND`, không phải nhiều lần
-  truy vấn. Chỉ `ToListAsync`/`CountAsync` mới thực sự chạm DB.
-- `Skip`/`Take` BẮT BUỘC đi kèm `OrderBy` **có tie-breaker duy nhất** (`ThenBy(p => p.Id)`).
-  Thiếu tie-breaker thì bản ghi trùng khoá sắp xếp có thể xuất hiện ở hai trang liền nhau
-  trong khi bản ghi khác biến mất.
-- Phương thức phân trang trả `PagedResult<T>` (có `TotalCount`), không trả `List<T>`:
-  giao diện cần tổng số bản ghi để biết còn trang sau hay không. `TotalCount` đếm theo
-  BỘ LỌC, chưa phân trang — hai query trên cùng một `IQueryable`.
-- Luôn kẹp `page` và `pageSize` đến từ query string (`page < 1` → 1, `pageSize` clamp
-  tối đa 100) để `?pageSize=999999` không kéo sập server.
-- EF Core **nhúng thẳng hằng số** vào SQL và chỉ tham số hoá giá trị đến từ **biến**.
-  Viết literal trong query làm mỗi giá trị sinh một câu SQL riêng, phá vỡ tái sử dụng
-  execution plan. Luôn truyền qua biến.
-- Dùng `ToQueryString()` để xem SQL mà không chạy query; dùng nó trong test để khoá
-  các tính chất quan trọng (có `OFFSET/FETCH`, có tham số hoá, có tie-breaker).
-
-### Validate nghiệp vụ — luôn làm ở HAI nơi
-Quy tắc chung của dự án: **validate ở Service để có thông báo tử tế, ràng buộc ở DB để có sự thật.**
-- Kiểm tra ở Service luôn có khe TOCTOU (giữa lúc kiểm tra và lúc lưu).
-- Vì vậy mọi quy tắc quan trọng phải có ràng buộc DB đi kèm: unique index,
-  check constraint, hoặc foreign key.
-- Ví dụ đã áp dụng: Username (unique index), Stock/Price >= 0 (check constraint),
-  không xoá Category còn Product (FK Restrict).
-
-### Dịch exception theo tầng
-- Infrastructure biết EF Core và mã lỗi SQL Server, dịch sang exception CHUNG
-  (`DuplicateKeyException`) — đặt trong `MiniMart.Common/Exceptions`.
-- Application diễn giải exception chung đó thành exception NGHIỆP VỤ theo ngữ cảnh
-  (`UsernameAlreadyExistsException`, `CategoryNameAlreadyExistsException`).
+- `SaveChangesAsync` CHỈ nằm ở `IUnitOfWork`, không bao giờ ở Repository.
 - Application và Web KHÔNG được `using Microsoft.EntityFrameworkCore`.
-- `DbUpdateConcurrencyException` cố ý không bị bọc lại — mỗi nghiệp vụ xử lý riêng.
-- `NotFoundException` mang theo `EntityName`, và Controller PHẢI dùng nó để phân biệt:
-  thiếu chính đối tượng đang thao tác → `NotFound()`; thiếu đối tượng được tham chiếu
-  → `AddModelError` vào đúng ô nhập rồi render lại form.
-
-### Đăng ký DI
-- Không viết `AddScoped` rời rạc trong `Program.cs`. Dùng extension method
-  `AddApplication()` (Application) và `AddInfrastructure(configuration)` (Infrastructure).
-- Repository / Service / UnitOfWork: **Scoped** (đồng bộ với DbContext).
-- Chỉ dùng Singleton cho thứ không giữ state và không phụ thuộc gì Scoped
-  (ví dụ `IPasswordHasher<User>`), tránh captive dependency.
-
-## Quy ước tầng Web
 - Form dùng **ViewModel riêng**, không bind thẳng Entity (chống over-posting).
 - Mọi POST có `[ValidateAntiForgeryToken]`. Xoá phải là POST, không dùng GET.
-- Sau POST thành công luôn `RedirectToAction` (Post-Redirect-Get); thông báo qua `TempData`.
-- Khi `ModelState` không hợp lệ và render lại form: **nạp lại dropdown/SelectList**,
-  vì `<select>` không gửi danh sách lựa chọn lên server.
-- Controller bắt exception nghiệp vụ và chuyển thành `ModelState.AddModelError`
-  hoặc `TempData`, không tự quyết định nghiệp vụ.
-- Area Admin: controller đặt tên `ProductController`, KHÔNG phải `AdminProductController`
-  (Area đã cung cấp tiền tố `/Admin/`). Route area phải đăng ký trước route default.
-
-### Razor view và form lọc
-- Razor view **được phép nhận thẳng entity**, không bắt buộc DTO. Ba lý do dùng DTO
-  cho JSON đều không áp dụng: không serialize nên không có vòng lặp; chỉ trường nào
-  được `@` mới ra HTML; Razor được biên dịch nên đổi tên property là lỗi build.
-  Đừng áp dụng máy móc "lúc nào cũng phải DTO".
-- Form lọc/tìm kiếm dùng **GET**, không POST: kết quả nằm trong URL nên bookmark,
-  chia sẻ link và bấm Back/Refresh đều hoạt động.
-- Sau khi lọc phải giữ `selected` trong dropdown, nếu không người dùng mất dấu
-  mình đang xem gì.
-- Hiển thị **trạng thái** còn/hết hàng, KHÔNG hiện con số tồn kho ra HTML.
-- Nhiều lệnh `await` trong cùng một action phải **nối tiếp**, không gói vào
-  `Task.WhenAll`: chúng dùng chung một `DbContext` (Scoped), mà `DbContext` không
-  thread-safe → "A second operation was started on this context instance".
-- Partial dùng lại được đặt ở `Views/Shared` (VD `_ProductCard.cshtml`).
-
-### Endpoint trả JSON
-- Action trả JSON **BẮT BUỘC** dùng DTO riêng, TUYỆT ĐỐI không trả thẳng entity.
-  Lý do cứng: `Product.Category` ↔ `Category.Products` tạo vòng lặp tham chiếu,
-  `System.Text.Json` ném `JsonException: A possible object cycle was detected` → HTTP 500.
-  Lỗi này CÓ ĐIỀU KIỆN (chỉ xảy ra khi navigation được nạp), nên một `Include`
-  thêm vào sau này có thể làm sập endpoint đang chạy tốt.
-- Hai lý do còn lại: không lộ dữ liệu nội bộ (`RowVersion`, `Stock`), và hợp đồng
-  JSON không dính vào tên property của entity.
-- Đặt DTO ở `MiniMart.Web/Models`. `System.Text.Json` tự đổi sang camelCase.
-- Response phân trang phải kèm `HasNextPage`, nếu không client cuộn vô tận không biết dừng.
-- Chọn `Json()` khi client tự dựng DOM hoặc có nhiều loại client; chọn `PartialView()`
-  khi muốn server render sẵn HTML. KHÔNG dùng `View()` cho request bổ sung dữ liệu
-  vào trang đang mở — nó gửi lại cả layout.
-
-### Layout
-- Khu vực quản trị dùng `Areas/Admin/Views/Shared/_AdminLayout.cshtml`, khai báo trong
-  `Areas/Admin/Views/_ViewStart.cshtml`. Trang khách hàng giữ `Views/Shared/_Layout.cshtml`.
-- Partial dùng chung cho cả hai (VD `_StatusMessages`) đặt ở `Views/Shared` — view trong
-  Area vẫn tìm thấy nhờ cơ chế fallback, không cần chép đôi.
-- Layout được phân giải lúc **chạy**, không phải lúc biên dịch: sai tên trong `_ViewStart`
-  thì `dotnet build` vẫn qua và chỉ nổ khi mở trang. Vì vậy mỗi layout phải có
-  integration test kiểm chứng đúng layout được dùng.
-
-### Upload file
-- **Tên file luôn do server sinh** (`Guid.NewGuid()` + phần mở rộng). TUYỆT ĐỐI không
-  dùng `file.FileName` làm tên lưu: mở đường cho path traversal và ghi đè lẫn nhau.
-- Whitelist phần mở rộng (`.jpg .jpeg .png .webp`) và giới hạn dung lượng bằng
-  **Data Annotation** — đây là ràng buộc tĩnh nên annotation dùng đúng chỗ.
-- DB chỉ lưu **đường dẫn tương đối**; file nằm trong `wwwroot`. Thư mục upload
-  đã được `.gitignore`.
-- Form có `input type="file"` BẮT BUỘC có `enctype="multipart/form-data"`.
-  Thiếu nó thì `IFormFile` luôn null và không có lỗi nào báo.
-- Trong luồng sửa, `imageUrl = null` nghĩa là **giữ ảnh cũ**, không phải xoá ảnh.
-- Thứ tự ghi/xoá: lưu file TRƯỚC khi gọi Service (lỗi thì chỉ dư file rác),
-  nhưng xoá file SAU khi DB xoá xong (lỗi thì bản ghi vẫn còn ảnh).
-- Service lưu trữ file thuộc tầng Web (phụ thuộc `IWebHostEnvironment`), đăng ký
-  trực tiếp trong `Program.cs`, không nằm trong `AddApplication`/`AddInfrastructure`.
-
-## Quy ước Authentication / Authorization
-- Cookie Authentication, scheme mặc định là `CookieAuthenticationDefaults.AuthenticationScheme`.
-- `app.UseAuthentication()` BẮT BUỘC đứng trước `app.UseAuthorization()`.
-- Claims dùng đúng `ClaimTypes.NameIdentifier` / `ClaimTypes.Name` / `ClaimTypes.Role`.
-  Dùng chuỗi tự chế (`"role"`) sẽ khiến `IsInRole` và `[Authorize(Roles=...)]` im lặng trả false.
-- `new ClaimsIdentity(claims, authenticationType)` — thiếu tham số thứ hai thì
-  `IsAuthenticated` = false dù có đủ claims.
-- Claims là **ảnh chụp lúc đăng nhập**. Đổi Role dưới DB không có hiệu lực cho đến
-  khi người dùng đăng nhập lại. `SlidingExpiration` gia hạn cookie nhưng KHÔNG làm mới claims.
-- Đặt `[Authorize]` ở cấp class để action thêm sau tự động được bảo vệ.
-- Ẩn link trên menu chỉ là trải nghiệm người dùng, không phải bảo mật.
-
-## Quy ước test
-- Nghiệp vụ (Service) → **unit test với Moq**, không cần DB. Đây là lợi ích chính của DIP.
-- Hành vi của database engine → **integration test trên SQL Server thật**:
-  rowversion, check constraint, foreign key, unique index.
-- **KHÔNG dùng EF Core InMemory** cho concurrency: nó không thực thi concurrency token
-  nên test luôn xanh kể cả khi code có bug.
-- Cấu hình model → đọc metadata (`context.Model`). Riêng check constraint phải đọc từ
-  `context.GetService<IDesignTimeModel>().Model` vì model runtime đã lược bỏ.
-- Integration test tự dọn dữ liệu mình tạo ra (`IAsyncLifetime.DisposeAsync`), dùng
-  tên có `Guid` để không đụng nhau.
+- Tên test viết bằng tiếng Việt không dấu, mô tả hành vi mong đợi.
 - **Mutation test bắt buộc**: sau khi viết test, cố tình phá code để xác nhận test đỏ.
   Test xanh chưa chứng minh được gì.
-- Tên test viết bằng tiếng Việt không dấu, mô tả hành vi mong đợi.
-- **Không assert trên chuỗi số ngắn** (`DoesNotContain("77")`) khi dữ liệu test sinh
-  ngẫu nhiên: GUID dạng hex có chứa chữ số nên assertion sẽ đỏ ngẫu nhiên. Dùng giá trị
-  đủ đặc biệt (7+ chữ số) hoặc assert theo cấu trúc thay vì chuỗi trần.
+
+## Quy ước chi tiết — ĐỌC FILE TƯƠNG ỨNG TRƯỚC KHI SỬA CODE
+
+Đây không phải tài liệu tham khảo tuỳ chọn. Mỗi file chứa những quyết định đã cân nhắc
+kỹ kèm lý do, và nhiều trong số đó là loại **sai mà không có lỗi nào báo**. Sửa code
+trong một vùng mà chưa đọc file của vùng đó là gần như chắc chắn vi phạm quy ước.
+
+| Sắp sửa gì | Đọc trước |
+|---|---|
+| Domain / Application / Infrastructure, hoặc viết truy vấn | `.claude/rules/data-access.md` |
+| Bất kỳ file nào trong MiniMart.Web (Controller, View, JS, upload) | `.claude/rules/web.md` |
+| Giỏ hàng, hoặc luồng đăng nhập (nó gộp giỏ) | `.claude/rules/cart.md` |
+| Luồng Edit của Product, UnitOfWork, bất cứ gì chạm RowVersion | `.claude/rules/concurrency.md` |
+| AccountController, cấu hình cookie/authorization, UserService | `.claude/rules/auth.md` |
+| VNPay, chữ ký, `IVnPayService`, `VnPayOptions` | `.claude/rules/payments.md` |
+| Bất kỳ test nào | `.claude/rules/testing.md` |
+| .editorconfig, Directory.Packages.props, .csproj, CI | `.claude/rules/build.md` |
+
+Skill `.claude/skills/` phụ trách quy trình (tạo Repository/Service, tạo migration,
+workflow học-và-làm). File `rules/` phụ trách quy ước. Hai thứ bổ sung nhau, không thay thế.
+
+## Bẫy im lặng — sai mà KHÔNG có exception hay warning nào
+
+Danh sách này ở lại file lõi vì đây đúng là những thứ không thể tự phát hiện lại: code
+build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong file `rules/` tương ứng.
+
+| Viết thế này | Chuyện xảy ra |
+|---|---|
+| `ToString("N0")` thay `MoneyFormat.ToMoneyText()` | Máy en-US in `111,000`, máy vi-VN in `111.000` |
+| `asp-for` cho `byte[] RowVersion` **thiếu `type="hidden"`** | Render ra `"System.Byte[]"`, concurrency biến mất (có `type="hidden"` thì lại đúng — đã đo) |
+| Server sửa một giá trị mà quên `ModelState.Remove` | `asp-for` vẫn render giá trị BẬY của người dùng |
+| `SetExpectedRowVersion` ghi `CurrentValue` | Không phát hiện xung đột, lost update |
+| Thiếu `enctype="multipart/form-data"` | `IFormFile` luôn null |
+| `PartialView` → `View` | Response kèm cả layout, trang lồng trong trang |
+| Chuỗi tự chế thay `ClaimTypes.Role` | `IsInRole` và `[Authorize(Roles=…)]` luôn false |
+| `new ClaimsIdentity(claims)` thiếu tham số 2 | `IsAuthenticated` = false dù đủ claims |
+| `UseRateLimiter()` trước `UseRouting()` | Không giới hạn gì cả |
+| Giữ `UseExceptionHandler` **cùng** `GlobalExceptionMiddleware` | Lớp trong bắt trước → middleware tự viết không chạy ở Production, nhưng vẫn chạy ở Development: thứ được test không phải thứ chạy thật |
+| Thiếu `HttpContext.User = principal` sau `SignInAsync` | `ICurrentUser.Id` null → giỏ hàng đổ |
+| `type="text"` cho ô số ở form lọc | vi-VN gõ `1.000.000` → bind thành `null` |
+| `Skip`/`Take` không có tie-breaker trong `OrderBy` | Bản ghi trùng/mất giữa hai trang |
+| Sai tên layout trong `_ViewStart` | Build qua, nổ khi mở trang |
+| `Task.WhenAll` nhiều `await` dùng chung `DbContext` | "A second operation was started" |
+| Factory chọn nhầm kho giỏ hàng | Giỏ vẫn chạy, chỉ là mất dữ liệu |
+| Thiếu **`ParseLimitsInInvariantCulture`** ở `[Range]` tiền | Máy vi-VN **ném ArgumentException** → HTTP 500 (`ConvertValueInInvariantCulture` KHÔNG đủ) |
+| Đặt tên input list bằng `foreach` hoặc dùng Id làm chỉ số | Binder dừng ở chỗ đứt quãng, âm thầm bỏ hết dòng còn lại |
+| `disabled` ô nhập của dòng đang hỏng trong bảng sửa hàng loạt | Trình duyệt KHÔNG gửi input disabled → chỉ số đứt quãng → binder bỏ mọi dòng sau, mà response vẫn báo "đã lưu". Dùng `readonly` |
+| Đổi tên một `data-*` mà JS đang `querySelector` | `null` → JS ngừng chạy, không lỗi nào |
+| Bọc node JS cần cập nhật trong `@if` | Lần đầu cần cập nhật thì không có node |
+| Xét nhánh PartialView trước nhánh JSON | Client nhận HTML, `response.json()` ném |
+| `Stock -= n` mà cột không phải concurrency token | **Oversell** — đã đo: bán 10 khi có 5 |
+| Chạm nhiều dòng không theo thứ tự cố định | Deadlock, chỉ xuất hiện dưới tải |
+| Nhận `userId` từ form thay vì `ICurrentUser` | IDOR: đặt đơn / đọc đơn dưới tên người khác |
+| Trả **403** thay vì **404** cho đơn của người khác | 403 xác nhận "đơn số 42 có tồn tại", mà Id tuần tự nên đoán được |
+| `Include(o => o.Items)` rồi `Sum` trong C# ở trang danh sách | Màn hình hiện **đúng** con số, chỉ là kéo về mọi dòng đơn của cả trang — chỉ test đếm lệnh SQL bắt được |
+| Quên `builder.Ignore()` cho property tính toán | Migration sinh cột không bao giờ được ghi |
+| Đọc lại `product.Price` khi tính tổng đơn | Tổng đơn lệch khỏi tổng các dòng |
+| `type="number"` cho ô số điện thoại | Mất số `0` đứng đầu, chặn luôn dấu `+` |
+| Quên nạp lại property `[BindNever]` khi render lại form | Trang hiện ra rỗng, không lỗi nào |
+| Địa chỉ giao hàng trỏ FK sang bảng `Addresses` | Sửa sổ địa chỉ là đơn CŨ đổi theo |
+| Thêm `VnPay:HashSecret` vào `appsettings.json` | App chạy **tốt hơn**, test xanh, bí mật vào Git vĩnh viễn |
+| Bind Options mà quên `.ValidateOnStart()` | Options tạo lười → cấu hình sai lộ ra ở request thanh toán đầu tiên |
+| Ghép chuỗi-để-ký và query string bằng **hai** đoạn code | `%20` vs `+` → VNPay từ chối, log hai bên trông y hệt nhau |
+| `vnp_Amount` để `decimal` thay vì ép `long` | Máy vi-VN in `125000000,00` — máy dev en-US không tái hiện |
+| `vnp_CreateDate` gửi giờ UTC | Lệch 7 tiếng → VNPay coi lệnh đã hết hạn |
+| Ghi nhận thanh toán ở **Return URL** thay vì IPN | Khách đóng tab = tiền đã trừ mà đơn vĩnh viễn "chưa trả" |
+| Đọc `vnp_ResponseCode` trước khi kiểm `vnp_SecureHash` | Tin dữ liệu chưa xác thực — ai cũng tự gõ được `?vnp_ResponseCode=00` |
+| Bỏ đối chiếu `vnp_Amount` vì "chữ ký đã hợp lệ rồi" | Đơn 10 triệu được đánh dấu đã trả bằng 10 nghìn |
+| Trả mã lỗi IPN cho một giao dịch **thất bại** | VNPay tưởng ta chưa nhận được → gửi lại mãi |
+| `defaultValue: ""` mà EF sinh cho cột enum-as-string | Dòng cũ mang giá trị không hợp lệ, nổ lúc đọc lên |
+| `ExecuteUpdate` cho đường ghi có `RowVersion` | Nó KHÔNG đi qua Change Tracker nên **không tự kẹp** token vào `WHERE` — Optimistic Concurrency biến mất, build sạch |
+| Dapper multi-exec để cập nhật nhiều dòng | Chỉ trả **tổng** số dòng — biết có dòng hỏng mà không biết dòng nào, nên không nêu được tên sản phẩm |
+| Quên `using` cho `SqlConnection` tự tạo (Dapper) | Connection không về pool → cạn pool → **`Timeout expired`** ở một truy vấn chẳng liên quan, và **chỉ dưới tải** |
+| `using` cho connection **MƯỢN** từ `_context.Database.GetDbConnection()` | Đóng connection của chính `DbContext` giữa chừng → mọi lệnh EF sau đó đổ, transaction đang mở bị huỷ |
+| Ghép dòng form với entity theo **vị trí** thay vì theo `Id` | Giá của sản phẩm này rơi vào sản phẩm khác; cả hai vẫn là số hợp lệ |
+| Ở nhánh "bỏ qua dòng xung đột" mà vẫn gán `Price`/`Stock` trước khi `continue` | EF vẫn sinh UPDATE → khớp 0 dòng → **cả batch revert**, trong khi thông báo vẫn nói "đã lưu 1 sản phẩm" |
+| Sau khi lưu THÀNH CÔNG MỘT PHẦN, chỉ nạp `RowVersion` mới cho dòng vướng | Lần Lưu sau báo xung đột ở đúng những dòng người dùng vừa ghi thành công |
+| Hai dòng cùng `Id` trong một lần cập nhật hàng loạt | Identity map cho ra MỘT object → dòng sau đè dòng trước, báo "đã cập nhật 2 sản phẩm" |
+| Server sửa giá trị của một tham số action (kẹp `page`) mà quên `ModelState.Remove` | `asp-for` render lại giá trị THÔ, và lần submit sau gửi lại đúng giá trị bậy đó |
+| Helper đăng nhập trong test chấp nhận **200** | Đăng nhập THẤT BẠI cũng là 200 (render lại form) → test chạy tiếp không cookie, đỏ ở chỗ chẳng liên quan |
+| `max="@Model.Stock"` cho ô nhập số lượng ở trang chi tiết | In bảng tồn kho của **toàn shop** vào HTML ở mọi lượt xem. Trần đúng là `100` (trần của `AddToCartRequest`); giới hạn thật do `CartService` kẹp |
+| Bọc **cả thẻ sản phẩm** trong `<a>` | `<form>` lồng trong `<a>` là HTML không hợp lệ — trình duyệt tự sửa cây DOM và nút "Thêm vào giỏ" hỏng theo kiểu khó đoán |
+| Regex non-greedy `<a…>(.*?)</a>` để kiểm thẻ lồng nhau | Khớp tới `</a>` **đầu tiên** nên không bao giờ thấy `<form>` bên trong — test xanh mà không chứng minh gì. Regex không đếm được cấu trúc lồng; phải đếm độ sâu |
+| Test bóc `value="…"` từ HTML mà **không `HtmlDecode`** | Base64 chứa `+` bị render thành `&#x2B;` → POST lại không giải mã được → RowVersion null → **không xung đột nào bị phát hiện**; đỏ NGẪU NHIÊN, trông như flaky hạ tầng |
 
 ## Môi trường
 - .NET SDK 10, SQL Server 2025 Express, instance `SQLEXPRESS`.
 - Connection string ở `appsettings.json`, dùng `Trusted_Connection=True` nên không có
   mật khẩu. Nếu chuyển sang SQL Authentication thì BẮT BUỘC dùng User Secrets.
+- **Bí mật VNPay nằm ở User Secrets**, không ở `appsettings.json`. Máy mới phải chạy:
+  `dotnet user-secrets set "VnPay:TmnCode" "<ma>" --project MiniMart.Web` và tương tự cho
+  `VnPay:HashSecret`. Thiếu là ứng dụng **từ chối khởi động** (`ValidateOnStart`) và mọi
+  integration test đỏ. Xem `.claude/rules/build.md`.
 - `dotnet-ef` cài global.
 - sqlcmd để kiểm tra DB trực tiếp:
   `"C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\180\Tools\Binn\SQLCMD.EXE" -S "localhost\SQLEXPRESS" -E -d MiniMart -C -Q "<sql>"`
@@ -193,27 +125,125 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
 ## Lệnh hay dùng
 - dotnet build
 - dotnet test
+- dotnet format --verify-no-changes   ← là một dạng test, phải sạch
 - dotnet run --project MiniMart.Web --launch-profile http
+- ./scripts/test-vnpay-ipn.ps1 -OrderId &lt;id&gt; -Reset   ← giả lập VNPay gọi IPN vào app đang chạy
+- dotnet run --project scripts/SeedDuLieuMau -- --xac-nhan   ← **XOÁ SẠCH** rồi nạp lại dữ liệu mẫu
 - dotnet ef migrations add <TenMigration> -p MiniMart.Infrastructure -s MiniMart.Web
 - dotnet ef database update -p MiniMart.Infrastructure -s MiniMart.Web
+
+`SeedDuLieuMau` giữ lại MỌI tài khoản `Role = Admin` và xoá phần còn lại, rồi nạp
+5 danh mục × 10 sản phẩm, 10 khách (`khach01`…`khach10` / `Khach@2026`), mỗi khách
+2–3 đơn, mỗi đơn 1–5 món. Thiếu `--xac-nhan` thì nó chỉ IN RA kế hoạch kèm chuỗi kết
+nối rồi thoát — chốt này có vì sai lầm đắt nhất của script loại này không phải chạy
+nhầm lúc mà là chạy đúng lúc trên **nhầm database**. Hạt ngẫu nhiên cố định nên chạy
+lại cho ra đúng bộ dữ liệu cũ. Nó nằm TRONG solution có chủ đích: script chạm mọi
+entity nên việc CI build nó là một phép kiểm nhất quán miễn phí — đổi tên một property
+mà quên script là lỗi build, không phải một script hỏng âm thầm.
 
 ## Lưu ý đặc biệt
 - Products.RowVersion dùng cho Optimistic Concurrency, không được xóa/sửa kiểu dữ liệu này khi generate code.
 - Xoá Category dùng `DeleteBehavior.Restrict`, KHÔNG đổi sang Cascade.
+- `CartItems → Products` dùng `Cascade` — cố ý KHÁC Category, đừng "sửa cho nhất quán".
 - Cột tiền tệ luôn là `decimal` với `HasPrecision(18, 2)`, không dùng double/float.
 
 ## Nợ kỹ thuật đã biết (cố ý chưa làm, đừng "sửa" nửa vời)
-- **Luồng Edit sản phẩm chưa round-trip RowVersion** qua hidden field, nên xung đột
-  trong lúc người dùng đang mở form KHÔNG được phát hiện. Thuộc phase Concurrency.
-- `IUnitOfWork` chưa có API transaction; sẽ thiết kế khi làm nghiệp vụ đặt hàng.
-- Auth còn 3 lỗ hổng: timing attack ở `AuthenticateAsync` (không hash khi user không
-  tồn tại), chưa rate limit đăng nhập, mật khẩu chỉ yêu cầu tối thiểu 6 ký tự.
-- Chưa có `Directory.Packages.props` (quản lý version package tập trung), `.editorconfig`, CI.
-- Nút "Xem thêm" trên trang chủ đã render nhưng **chưa có JavaScript** gọi
-  `/Product/LoadMore`. Hệ quả của việc chọn `Json()` thay vì `PartialView()`: client sẽ
-  phải dựng lại markup thẻ sản phẩm bằng JS, tức trùng lặp với `_ProductCard.cshtml`.
-  Khi làm phần này, cân nhắc lại: hoặc chấp nhận trùng lặp, hoặc đổi `LoadMore` sang
-  trả `PartialView("_ProductCard")`.
+
+### Hoãn có chủ đích — KHÔNG làm cho tới khi điều kiện đủ
+- `Cart`/`CartItem` **chưa có `RowVersion`**, và chưa cần: giỏ hàng là dữ liệu của MỘT
+  người, không có hai người cùng sửa một giỏ. Trường hợp duy nhất là một người mở hai tab,
+  và ở đó "ghi sau thắng" đúng ý muốn của họ. Việc cần khoá thật là **trừ tồn kho lúc đặt
+  hàng** — nhưng khoá trên `Products.RowVersion` (đã có), không phải trên giỏ.
+- Nhánh **`PartialView` của ba endpoint ghi giỏ hàng** (`X-Requested-With` mà không kèm
+  `Accept: application/json`) hiện **không có client nào dùng** — dropdown dùng nhánh JSON,
+  trang `/Cart` dùng nhánh PRG. Giữ lại vì nó là đường tự nhiên nếu sau này trang `/Cart`
+  cần cập nhật cả bảng bằng AJAX, và nó có test. Đừng xoá mà cũng đừng tưởng nó đang chạy.
+
+### Nợ thật, chưa trả
+- **Hai file JS KHÔNG có test chạy thật** (`home-load-more.js`, `cart-dropdown.js`) — dự án
+  chưa có headless browser (Playwright). Kiểm chứng được: HTML mà endpoint trả về, hình
+  dạng JSON, header `X-Next-Page`/`X-Cart-Count`, sự tồn tại của từng hook `data-*`
+  (integration test), cú pháp JS (`node --check`). **Chưa** kiểm chứng được: `fetch` chạy
+  thật, `insertAdjacentHTML`/`textContent` cập nhật đúng node, cờ chặn double-click, cờ
+  `canDungLai` của dropdown, việc gỡ node khi xoá dòng. Đây là khoảng trống test lớn nhất
+  còn lại; thêm Playwright đáng một phase riêng.
+- **CI chưa từng chạy thật.** File `.github/workflows/ci.yml` đã viết nhưng chỉ xác nhận
+  được phần chạy được ở local (`dotnet format --verify-no-changes` sạch, `dotnet test` xanh).
+  Service container SQL Server, `sqlcmd` trong image `mssql/server:2022-latest`, và
+  `dotnet ef database update` trên CI đều **chưa có bằng chứng** — phải push rồi xem lần
+  chạy đầu, đừng tin file YAML chỉ vì nó trông đúng.
+- Xung đột concurrency mới xử lý cho **Product**. `Category` chưa có `RowVersion` nên sửa
+  danh mục đồng thời vẫn ghi đè lẫn nhau. Chưa cấp bách vì danh mục ít bị sửa.
+- Rate limit dùng bộ nhớ **trong tiến trình**: chạy nhiều instance thì mỗi instance có hạn
+  mức riêng, tổng hạn mức nhân lên theo số instance. Cần Redis khi scale ngang.
+- **Session giỏ hàng cũng nằm trong bộ nhớ tiến trình** — cùng loại hạn chế. Restart server
+  là mất giỏ của mọi khách vãng lai; chạy nhiều instance thì mỗi instance một giỏ khác nhau.
+  Cùng một lần thêm Redis giải quyết được cả hai.
+- Đua tạo giỏ lần đầu (`DuplicateKeyException` từ `UNIQUE(Carts.UserId)`) hiện chỉ hiện
+  "Vui lòng thử lại", chưa **thử lại thật**. Thử lại sạch sẽ đòi một `DbContext` mới nên
+  không làm được trong cùng request. Cửa sổ race rất hẹp (chỉ request đầu tiên của một tài
+  khoản mới) nên chưa đáng đổi lấy độ phức tạp.
+- **Đặt hàng chưa có retry khi xung đột.** Optimistic Concurrency chống oversell tuyệt đối,
+  nhưng 10 người bấm cùng lúc khi còn 5 hàng thì chỉ **1** đơn thành công — 9 người còn lại
+  nhận "vui lòng cập nhật giỏ hàng" dù kho vẫn còn 4. Đã đo bằng test. Cần retry (hoặc đổi
+  sang Pessimistic `UPDLOCK`) khi có flash sale; chưa đáng làm bây giờ. Xem
+  `.claude/rules/concurrency.md`.
+- **Transaction tường minh trong `CheckoutAsync` hiện chưa chịu lực.** Mọi thao tác ghi đi
+  qua MỘT `SaveChangesAsync`, mà EF Core đã tự bọc mỗi `SaveChanges` trong transaction ngầm —
+  mutation test xác nhận bỏ nó đi thì cả 5 integration test vẫn xanh. Giữ lại vì nó đúng
+  ngay khi có `SaveChanges` thứ hai (bản ghi thanh toán), nhưng **đừng tưởng nó đang bảo vệ
+  atomicity hôm nay**.
+- **Địa chỉ giao hàng phải gõ lại mỗi lần đặt.** Chưa có sổ địa chỉ (chọn nhanh từ các lần
+  trước), và cũng chưa tự điền từ đơn gần nhất. Cố ý: `Order` đã snapshot đủ 3 cột nên thêm
+  sổ địa chỉ về sau không phải sửa gì ở luồng đặt hàng — đúng tinh thần hoãn tới lúc cần.
+- **VNPay đã đủ luồng đầu-cuối** (nút Checkout → ký URL → cổng → Return → IPN → `Paid`),
+  nhưng **chưa chạy thật được**: khoá sandbox trong User Secrets vẫn là placeholder, và
+  VNPay không gọi IPN tới `localhost` được (cần ngrok). Còn thiếu: **thanh toán lại**
+  (bị chặn bởi việc `vnp_TxnRef = OrderId` mà VNPay từ chối `TxnRef` đã dùng), **đối
+  soát định kỳ** khi IPN mất hẳn, và `Order` **chưa lưu phương thức thanh toán**. Xem
+  `.claude/rules/payments.md`.
+- **Bộ test có một nguồn flaky chưa xử lý tận gốc.** Mọi client `WebApplicationFactory`
+  có `RemoteIpAddress = null` nên **cả bộ test dùng chung một hạn mức rate limit** của
+  `POST /Account/Login`. Đã gặp 2 test đỏ ngẫu nhiên vì lý do này. Đã giảm nhẹ bằng
+  assertion tự tố giác trong helper đăng nhập, nhưng chưa sửa gốc — cách sạch là cho
+  mỗi test class một partition riêng (VD header `X-Forwarded-For` giả + đọc nó trong
+  limiter), hoặc tắt hẳn rate limit ở môi trường test trừ chính test rate limit.
+- **Sửa hàng loạt vẫn all-or-nothing ở đúng MỘT trường hợp hiếm**: có người ghi vào
+  khoảng vài mili giây giữa lệnh đọc và `SaveChanges`. Xung đột thông thường đã bỏ qua
+  chọn lọc từng dòng. Chưa tự thử lại vì retry sạch đòi một `DbContext` mới — cùng lý do
+  đã hoãn retry cho đua tạo giỏ hàng lần đầu. Xem `.claude/rules/concurrency.md`.
+- **Helper đăng nhập trong test bị chép 4 bản** (`AdminCrudTests`, `ProductBulkEditPageTests`,
+  `ProductBulkUpdateTests`, `ProductConcurrencyTests`). Ngưỡng gộp của dự án là bản thứ ba
+  nên nó đã quá hạn. Ba bản cũ còn chấp nhận **200** là đăng nhập thành công — mà 200 chính
+  là đăng nhập THẤT BẠI; chỉ bản trong `ProductBulkUpdateTests` đã siết thành đúng 302.
+- **Trang "Đơn hàng của tôi" chưa có nút thanh toán lại.** Đơn `Pending` hiện chỉ nói rõ
+  là chưa ghi nhận thanh toán, không có đường trả tiền — bị chặn bởi `vnp_TxnRef = OrderId`.
+  Cố ý không hiện nút bấm vào ra lỗi.
+- **`Order` chưa có `Status`** — cố ý. Thêm cột trạng thái trước khi biết đơn có những trạng
+  thái nào là đoán, cùng lý do đã hoãn API transaction cho tới đúng lúc cần.
+
+### Đã trả (giữ lại để không ai "sửa" ngược)
+- ~~Round-trip RowVersion~~ → đã làm, xem `.claude/rules/concurrency.md`.
+- ~~3 lỗ hổng auth~~ → đã vá cả ba, xem `.claude/rules/auth.md`.
+- ~~`Directory.Packages.props`, `.editorconfig`, CI~~ → đã có, xem `.claude/rules/build.md`.
+- ~~Validate `minPrice`/`maxPrice`~~ → đã làm bằng Data Annotation + `IValidatableObject`
+  trên `ProductFilter`, KHÔNG phải ở Service: ràng buộc này không cần DB, không cần async,
+  không cần DI — đúng tiêu chí ở `.claude/rules/data-access.md`.
+- ~~Giỏ hàng cho khách vãng lai~~ → đã làm bằng `ICartStore` + factory Scoped, xem
+  `.claude/rules/cart.md`. Đừng "đơn giản hoá" bằng cách bắt đăng nhập mới mua được.
+- ~~Chống IDOR trên giỏ hàng~~ → đã làm bằng cấu trúc (`productId`, không `cartItemId`), có
+  7 test và 3 mutation. Đừng thêm `cartItemId` vào request model "cho tiện".
+- ~~`IUnitOfWork` chưa có API transaction~~ → đã thêm **đúng lúc** làm nghiệp vụ đặt hàng,
+  như điều kiện đã đặt ra từ đầu. `ITransaction` ở Domain bọc `IDbContextTransaction`.
+- ~~Trang "Đơn hàng của tôi"~~ → đã làm ở Phase 9. Danh sách dùng read model riêng
+  (`OrderSummary`) chiếu ngay trong truy vấn; đừng "đơn giản hoá" thành `Include(o => o.Items)`,
+  xem `.claude/rules/data-access.md`.
+- ~~Trang chi tiết sản phẩm~~ → đã làm ở Phase 10. `/Product/Details/{id}` giữ route MẶC
+  ĐỊNH; đừng "làm đẹp URL" thành `/Product/5` bằng attribute route — nó tắt route mặc định
+  cho chính action đó và làm dự án có hai kiểu URL. Xem `.claude/rules/web.md`.
+- ~~Trừ tồn kho chống oversell~~ → đã làm bằng Optimistic trên `Products.RowVersion`, có
+  test song song trên SQL Server thật. Đừng đổi `IsRowVersion()` — mutation đã chứng minh
+  bỏ nó đi là bán 10 món khi chỉ có 5.
 
 ## Cách làm việc với tôi (người học)
 - Tôi đang học song song, nên MỌI đoạn code Claude Code viết ra đều phải kèm:
@@ -221,4 +251,5 @@ Quy tắc chung của dự án: **validate ở Service để có thông báo t�
   2. Chỉ rõ những điểm liên quan trực tiếp đến kiến thức tôi đang học (LINQ, SOLID, DI, EF Core, Auth...).
   3. Nếu có 2 cách làm khác nhau (VD: Optimistic vs Pessimistic locking), giải thích cả 2 và lý do chọn 1.
 - Với các phần khó (Transaction, Concurrency, Bulk Update), giải thích Ý TƯỞNG trước khi viết code.
-- Cuối mỗi Phase: cập nhật chính file này với pattern/quy ước mới phát sinh.
+- Cuối mỗi Phase: cập nhật file này (hoặc file `rules/` tương ứng) với pattern/quy ước mới
+  phát sinh. Quy ước chi tiết vào `rules/`; chỉ thứ luôn-đúng-mọi-lúc mới thêm vào file lõi.

@@ -10,10 +10,14 @@ public class ProductServiceTests
 {
     private readonly Mock<IProductRepository> _productRepository = new();
     private readonly Mock<ICategoryRepository> _categoryRepository = new();
+    private readonly Mock<IOrderRepository> _orderRepository = new();
     private readonly Mock<IUnitOfWork> _unitOfWork = new();
 
     private ProductService CreateSut() =>
-        new(_productRepository.Object, _categoryRepository.Object, _unitOfWork.Object);
+        new(_productRepository.Object,
+            _categoryRepository.Object,
+            _orderRepository.Object,
+            _unitOfWork.Object);
 
     private void GiaSuTonTaiDanhMuc(int id) =>
         _categoryRepository
@@ -101,7 +105,11 @@ public class ProductServiceTests
     {
         var product = new Product
         {
-            Id = 1, Name = "Cu", Price = 1m, Stock = 1, CategoryId = 1,
+            Id = 1,
+            Name = "Cu",
+            Price = 1m,
+            Stock = 1,
+            CategoryId = 1,
             ImageUrl = "/images/products/cu.jpg"
         };
         _productRepository
@@ -122,7 +130,11 @@ public class ProductServiceTests
     {
         var product = new Product
         {
-            Id = 1, Name = "Cu", Price = 1m, Stock = 1, CategoryId = 1,
+            Id = 1,
+            Name = "Cu",
+            Price = 1m,
+            Stock = 1,
+            CategoryId = 1,
             ImageUrl = "/images/products/cu.jpg"
         };
         _productRepository

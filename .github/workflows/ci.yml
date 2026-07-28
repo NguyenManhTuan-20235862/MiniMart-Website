@@ -1,0 +1,169 @@
+name: CI
+
+on:
+  # Chạy trên MỌI nhánh, không chỉ main. Cấu hình cũ (chỉ main) nghe an toàn nhưng có
+  # hệ quả là CI không chạy một lần nào suốt 8 phase: công việc diễn ra trên nhánh
+  # feature, mà nhánh feature thì không kích hoạt gì cả. Một CI chỉ chạy lúc merge là
+  # một CI phát hiện vấn đề ở đúng lúc đắt nhất để sửa.
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+  # Cho phép bấm "Run workflow" tay trên tab Actions - hữu ích khi muốn chạy lại mà
+  # không cần tạo commit rỗng.
+  workflow_dispatch:
+
+# Push liên tiếp vào cùng một nhánh thì huỷ lần chạy cũ: kết quả của commit đã bị thay
+# thế không còn ai quan tâm, mà nó vẫn chiếm runner. Cũng dập luôn việc chạy hai lần
+# khi một nhánh vừa được push vừa đang có PR mở.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    # Bộ test của dự án CỐ Ý không dùng EF Core InMemory: rowversion, check
+    # constraint, foreign key và unique index là hành vi của database engine,
+    # InMemory không thực thi chúng nên test sẽ xanh kể cả khi code có bug.
+    # Vì vậy CI BẮT BUỘC có SQL Server thật.
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: ${{ secrets.CI_SQL_PASSWORD || 'Ci_MiniMart_2026!' }}
+          MSSQL_PID: Express
+        ports:
+          - 1433:1433
+
+    env:
+      # Máy dev dùng Windows Authentication (Trusted_Connection=True), container
+      # Linux không có nên CI phải dùng SQL Authentication.
+      #
+      # Hai dấu gạch dưới là cách .NET map biến môi trường vào cấu hình lồng nhau:
+      # ConnectionStrings__DefaultConnection -> ConnectionStrings:DefaultConnection.
+      # Nó ghi đè appsettings.json mà KHÔNG phải sửa file, nên máy dev không bị ảnh hưởng.
+      ConnectionStrings__DefaultConnection: >-
+        Server=localhost,1433;Database=MiniMart;User Id=sa;
+        Password=${{ secrets.CI_SQL_PASSWORD || 'Ci_MiniMart_2026!' }};
+        TrustServerCertificate=True
+
+      # Cấu hình VNPay. BẮT BUỘC có vì VnPayOptions dùng ValidateOnStart: thiếu là
+      # ứng dụng từ chối khởi động, và MỌI integration test đỏ ngay ở dòng đầu.
+      #
+      # User Secrets không cứu được ở đây - nó chỉ được nạp khi environment là
+      # Development và nó nằm trong hồ sơ người dùng, không có trên runner của CI.
+      #
+      # Giá trị giả là ĐỦ và ĐÚNG cho CI: chưa có test nào gọi sang VNPay thật.
+      # Khi có test ký/kiểm chữ ký thì dùng `secrets.VNPAY_HASH_SECRET`, TUYỆT ĐỐI
+      # không đưa khoá sandbox thật vào file này - file này nằm trong Git.
+      VnPay__TmnCode: CI_TMNCODE
+      VnPay__HashSecret: ${{ secrets.VNPAY_HASH_SECRET || 'CI_HASHSECRET_GIA' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Chờ SQL Server sẵn sàng
+        # Container báo "started" trước khi engine nhận kết nối. Không chờ thì bước
+        # migration đổ ở lần chạy đầu và CI đỏ ngẫu nhiên.
+        #
+        # ★ Chạy sqlcmd BÊN TRONG container qua `docker exec`, không chạy trên runner.
+        # Bản trước gọi thẳng /opt/mssql-tools18/bin/sqlcmd và nó KHÔNG BAO GIỜ chạy
+        # được: `run:` thực thi trên runner ubuntu-latest, mà runner không có
+        # mssql-tools. Đường dẫn đó chỉ tồn tại trong image mssql/server.
+        #
+        # Thử cả hai đường dẫn vì tên thư mục đổi giữa các phiên bản image
+        # (mssql-tools -> mssql-tools18), và ta không kiểm soát được image nào được kéo về.
+        env:
+          SA_PASSWORD: ${{ secrets.CI_SQL_PASSWORD || 'Ci_MiniMart_2026!' }}
+          CONTAINER_ID: ${{ job.services.sqlserver.id }}
+        run: |
+          for i in $(seq 1 60); do
+            for tool in /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd; do
+              if docker exec "$CONTAINER_ID" "$tool" \
+                  -S localhost -U sa -P "$SA_PASSWORD" -C -Q "SELECT 1" > /dev/null 2>&1; then
+                echo "SQL Server san sang sau ${i}s (dung $tool)"
+                exit 0
+              fi
+            done
+            sleep 1
+          done
+
+          echo "SQL Server khong phan hoi sau 60s. Log cua container:"
+          docker logs "$CONTAINER_ID" | tail -40
+          exit 1
+
+      - name: Restore
+        # Dự án dùng Central Package Management: version nằm ở
+        # Directory.Packages.props, restore sẽ đổ nếu file đó thiếu package nào.
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Áp migration lên DB của CI
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.10
+          dotnet ef database update \
+            -p MiniMart.Infrastructure -s MiniMart.Web --no-build --configuration Release
+
+      - name: Test
+        run: >-
+          dotnet test --no-build --configuration Release
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=ket-qua.trx"
+          --results-directory TestResults
+
+      # Không có bước này thì một lần chạy đỏ chỉ để lại đúng một dòng
+      # "Process completed with exit code 1" trong annotation, và muốn biết test nào
+      # hỏng thì bắt buộc phải mở log trong trình duyệt - mà log của Actions cần đăng
+      # nhập, nên không công cụ nào ngoài trình duyệt đọc được.
+      #
+      # `::error::` là workflow command: mỗi dòng in ra thành một annotation, và
+      # annotation ĐỌC ĐƯỢC qua REST API công khai. Nhờ vậy chẩn đoán được từ dòng lệnh.
+      - name: Nêu tên test đỏ thành annotation
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          soDo = 0
+
+          for duongDan in glob.glob('TestResults/**/*.trx', recursive=True):
+              for ketQua in ET.parse(duongDan).getroot().iter(f'{{{ns["t"]}}}UnitTestResult'):
+                  if ketQua.get('outcome') != 'Failed':
+                      continue
+
+                  soDo += 1
+                  ten = ketQua.get('testName')
+                  loi = ketQua.find(f'{{{ns["t"]}}}Output/{{{ns["t"]}}}ErrorInfo/{{{ns["t"]}}}Message')
+                  thongBao = ' '.join((loi.text or '').split())[:400] if loi is not None else '(khong co thong bao)'
+
+                  print(f'::error title=Test do::{ten} -- {thongBao}')
+
+          print(f'::error title=Tong ket::Co {soDo} test do.')
+          PY
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Job riêng và KHÔNG cần SQL Server: kiểm tra định dạng theo .editorconfig.
+      # --verify-no-changes làm CI đỏ thay vì tự sửa file, vì CI không được phép
+      # commit hộ - lập trình viên phải chạy `dotnet format` và tự xem diff.
+      - name: Kiểm tra định dạng theo .editorconfig
+        run: dotnet format --verify-no-changes --verbosity diagnostic

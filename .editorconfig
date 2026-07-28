@@ -1,0 +1,105 @@
+# Quy ước định dạng cho MiniMart. Mọi IDE (Visual Studio, VS Code, Rider) và
+# `dotnet format` đều đọc file này, nên nó là nguồn duy nhất cho style.
+#
+# Mục đích thật: loại tranh luận về style khỏi code review. Không có file này thì
+# mỗi máy dev có setting riêng và diff đầy thay đổi khoảng trắng, che mất thay
+# đổi thật.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.{csproj,props,targets}]
+indent_size = 2
+
+[*.md]
+# Markdown dùng hai dấu cách cuối dòng để ngắt dòng, cắt đi là mất định dạng.
+trim_trailing_whitespace = false
+
+[*.cs]
+# ───────── using ─────────
+csharp_using_directive_placement = outside_namespace:error
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# ───────── Cú pháp hiện đại đang dùng trong dự án ─────────
+csharp_style_namespace_declarations = file_scoped:error
+csharp_prefer_braces = true:warning
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_prefer_primary_constructors = false:suggestion
+
+# Pattern matching: dự án dùng `is null` / `is not null` xuyên suốt.
+csharp_style_prefer_is_null_check_over_reference_equality_method = true:warning
+csharp_style_prefer_null_check_over_type_check = true:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+
+# Collection expression [] - dùng trong ProductFormViewModel, ValidationResult...
+dotnet_style_prefer_collection_expression = true:suggestion
+
+# ───────── Đặt tên ─────────
+# Luật `static readonly` phải khai báo TRƯỚC luật private field: Roslyn áp dụng
+# luật KHỚP ĐẦU TIÊN, và `required_modifiers = readonly` khớp cả static lẫn
+# instance. Đảo thứ tự thì AllowedExtensions / HashGia bị đòi đổi thành
+# _allowedExtensions - sai quy ước, vì static readonly đóng vai hằng số.
+dotnet_naming_rule.static_readonly_pascal.severity = suggestion
+dotnet_naming_rule.static_readonly_pascal.symbols = static_readonly_fields
+dotnet_naming_rule.static_readonly_pascal.style = pascal_case_style
+
+dotnet_naming_symbols.static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.static_readonly_fields.applicable_accessibilities = private, internal, protected
+dotnet_naming_symbols.static_readonly_fields.required_modifiers = static, readonly
+
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel_case
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_fields.required_modifiers = readonly
+
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+
+dotnet_naming_rule.interfaces_start_with_i.severity = error
+dotnet_naming_rule.interfaces_start_with_i.symbols = interfaces
+dotnet_naming_rule.interfaces_start_with_i.style = prefix_i
+
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_style.prefix_i.required_prefix = I
+dotnet_naming_style.prefix_i.capitalization = pascal_case
+
+# ───────── Cảnh báo đáng nâng lên lỗi ─────────
+# Thiếu await là bug im lặng: method chạy nền, exception biến mất.
+dotnet_diagnostic.CS4014.severity = error
+# Biến/field không dùng - thường là dấu vết của refactor bỏ dở.
+dotnet_diagnostic.IDE0051.severity = warning
+dotnet_diagnostic.IDE0052.severity = warning
+
+[MiniMart.Infrastructure/Migrations/**.cs]
+# File do `dotnet ef migrations add` SINH RA. Không áp style của dự án lên chúng:
+# sửa tay thì lần sinh migration sau lại lệch trở lại, và diff giả sẽ che mất
+# migration thật trong code review.
+generated_code = true
+csharp_style_namespace_declarations = block_scoped:none
+dotnet_diagnostic.IDE0161.severity = none
+# EF Core ghi file có BOM và dùng LF, khác quy ước ở [*] phía trên.
+charset = utf-8-bom
+end_of_line = unset
+
+[MiniMart.Tests/**.cs]
+# Tên test viết bằng tiếng Việt không dấu, có dấu gạch dưới - đúng quy ước dự án,
+# nên tắt luật đặt tên method của analyzer cho riêng thư mục test.
+dotnet_diagnostic.IDE1006.severity = none

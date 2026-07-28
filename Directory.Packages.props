@@ -1,0 +1,60 @@
+<Project>
+
+  <!--
+    Central Package Management (CPM).
+
+    Từ đây, csproj chỉ khai báo <PackageReference Include="..." /> KHÔNG kèm
+    Version; version tập trung ở file này.
+
+    Lý do: trước đây Microsoft.EntityFrameworkCore.SqlServer ở Infrastructure và
+    Microsoft.EntityFrameworkCore.Design ở Web là hai dòng Version độc lập. Nâng
+    một bên mà quên bên kia thì hai phiên bản EF Core cùng tồn tại trong một
+    tiến trình - lỗi biểu hiện lúc chạy, thường ở chỗ chẳng liên quan gì.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+    <!--
+      Chặn csproj tự ghi đè version. Không có dòng này thì một csproj vẫn được
+      phép khai báo Version="..." riêng và CPM mất tác dụng trong im lặng.
+    -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="Runtime">
+    <PackageVersion Include="Dapper" Version="2.1.79" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.10" />
+    <!--
+      Cần cho OptionsBuilder.Bind(IConfigurationSection) ở Infrastructure. Web có sẵn
+      API này qua shared framework của ASP.NET Core, còn Infrastructure là classlib
+      thường nên phải khai báo tường minh.
+    -->
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
+
+    <!--
+      ASP.NET Core KHÔNG có provider ghi file. Bộ dựng sẵn chỉ gồm Console, Debug,
+      EventSource và EventLog (chỉ Windows) - không có File. Ghi log ra đĩa bắt buộc
+      phải dùng thư viện ngoài, đây không phải lựa chọn "cho tiện".
+
+      Serilog.AspNetCore là gói gộp: kéo theo Serilog, Sinks.Console, Sinks.File và
+      Settings.Configuration (đọc cấu hình từ appsettings.json). Khai một dòng ở đây
+      thay vì bốn dòng rời để không có chuyện nâng lệch phiên bản giữa chúng - đúng
+      lý do CPM tồn tại.
+    -->
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Test">
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="Moq" Version="4.20.72" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+</Project>

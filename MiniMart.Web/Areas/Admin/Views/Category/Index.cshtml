@@ -3,32 +3,70 @@
     ViewData["Title"] = "Quản lý danh mục";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2>Danh mục</h2>
-    <a asp-action="Create" class="btn btn-primary">Thêm danh mục</a>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <div>
+        <h1 class="es-section-title">Quản lý danh mục</h1>
+        <p class="es-section-subtitle mb-0">Danh sách các danh mục phân loại sản phẩm trong cửa hàng</p>
+    </div>
+    <a asp-action="Create" class="btn btn-primary fw-semibold shadow-sm">
+        ➕ Thêm danh mục
+    </a>
 </div>
 
 @if (Model.Count == 0)
 {
-    <p class="text-muted">Chưa có danh mục nào.</p>
+    <div class="es-empty-state bg-white rounded-3 border p-5 text-center my-3">
+        <div class="es-empty-state-icon">📁</div>
+        <h4 class="fw-bold mb-2">Chưa có danh mục nào</h4>
+        <p class="text-muted mb-4">Tạo danh mục đầu tiên để bắt đầu phân loại sản phẩm cho cửa hàng.</p>
+        <a asp-action="Create" class="btn btn-primary px-4">Thêm danh mục</a>
+    </div>
 }
 else
 {
-    <table class="table table-striped">
-        <thead>
-            <tr><th>Tên danh mục</th><th class="text-end">Thao tác</th></tr>
-        </thead>
-        <tbody>
-            @foreach (var category in Model)
-            {
-                <tr>
-                    <td>@category.Name</td>
-                    <td class="text-end">
-                        <a asp-action="Edit" asp-route-id="@category.Id" class="btn btn-sm btn-outline-secondary">Sửa</a>
-                        <a asp-action="Delete" asp-route-id="@category.Id" class="btn btn-sm btn-outline-danger">Xoá</a>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="card es-checkout-card mb-4">
+        <div class="card-header fw-bold es-checkout-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <span class="es-checkout-header-icon">📁</span>
+                Danh sách danh mục
+            </div>
+            <span class="badge bg-primary rounded-pill">@Model.Count danh mục</span>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table align-middle table-hover mb-0">
+                    <thead class="bg-light">
+                        <tr class="text-muted small">
+                            <th scope="col" class="ps-4" style="width: 100px;">Mã ID</th>
+                            <th scope="col">Tên danh mục</th>
+                            <th scope="col" class="text-end pe-4" style="width: 160px;">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var category in Model)
+                        {
+                            <tr>
+                                <td class="ps-4">
+                                    <span class="badge bg-light text-dark border">#@category.Id</span>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2 fw-semibold text-dark">
+                                        <span>📁</span>
+                                        <span>@category.Name</span>
+                                    </div>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <div class="btn-group btn-group-sm">
+                                        <a asp-action="Edit" asp-route-id="@category.Id" class="btn btn-outline-secondary">Sửa</a>
+                                        <a asp-action="Delete" asp-route-id="@category.Id" class="btn btn-outline-danger">Xoá</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 }

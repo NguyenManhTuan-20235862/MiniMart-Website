@@ -1,0 +1,63 @@
+@model VnPayReturnViewModel
+@{
+    ViewData["Title"] = "Kết quả thanh toán";
+
+    var (kieuHop, tieuDe) = Model.TrangThai switch
+    {
+        KetQuaThanhToan.ThanhCong => ("alert-success", "Thanh toán thành công"),
+        KetQuaThanhToan.DaHuy => ("alert-warning", "Đã huỷ giao dịch"),
+        KetQuaThanhToan.ThatBai => ("alert-danger", "Thanh toán không thành công"),
+        _ => ("alert-secondary", "Không xác nhận được kết quả")
+    };
+}
+
+<div class="alert @kieuHop">
+    <h1 class="h4 mb-1">@tieuDe</h1>
+    <div>@Model.ThongBao</div>
+</div>
+
+@*
+    ★ Ghi chú chống hiểu lầm. Bắt buộc, và bắt buộc hiện cho MỌI trạng thái đã xác thực
+    được - kể cả trạng thái "thành công".
+
+    Lý do: trang này dựng từ dữ liệu đi qua TRÌNH DUYỆT KHÁCH, còn việc ghi nhận thanh
+    toán đi qua kênh IPN (máy chủ sang máy chủ) và có thể tới sau, hoặc chưa tới. Có
+    thật một khoảng thời gian mà khách đọc "thành công" ở đây trong khi đơn dưới DB vẫn
+    là Pending.
+
+    Nói "đã thanh toán thành công" ở khoảnh khắc đó là hứa một điều hệ thống chưa biết,
+    và người chịu hậu quả là chính khách đang đọc câu này. Ngược lại, im lặng không nói
+    gì cũng sai: khách thấy tiền bị trừ mà đơn chưa đổi thì sẽ nghĩ mất tiền.
+*@
+@if (Model.TrangThai != KetQuaThanhToan.KhongXacThucDuoc)
+{
+    <div class="alert alert-info d-flex gap-2">
+        <span aria-hidden="true">&#9432;</span>
+        <div>
+            Đây là kết quả <strong>sơ bộ</strong> do cổng thanh toán hiển thị.
+            <strong>Trạng thái chính thức của đơn hàng sẽ được xác nhận qua hệ thống</strong>
+            ngay sau khi ngân hàng gửi kết quả cuối cùng — thường trong vài giây.
+            Hãy mở lại đơn hàng để xem trạng thái đã cập nhật.
+        </div>
+    </div>
+}
+
+@*
+    Trang này KHÔNG hiện chi tiết đơn hàng, dù mã đơn đã có sẵn ở đây.
+
+    Nó [AllowAnonymous] nên bất cứ ai cầm được URL - nó nằm trong lịch sử trình duyệt,
+    và từng đi qua thanh địa chỉ - cũng mở được. Chi tiết đơn nằm sau link dưới đây,
+    tại /Checkout/Success/{id}, nơi vẫn [Authorize] và vẫn lọc theo chủ sở hữu: người
+    lạ bấm vào chỉ nhận 404.
+*@
+@if (Model.OrderId is int orderId)
+{
+    <a class="btn btn-primary" asp-controller="Checkout" asp-action="Success"
+       asp-route-id="@orderId">
+        Xem đơn hàng #@orderId
+    </a>
+}
+
+<a class="btn btn-outline-secondary" asp-controller="Home" asp-action="Index">
+    Tiếp tục mua sắm
+</a>

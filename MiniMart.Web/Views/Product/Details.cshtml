@@ -1,0 +1,171 @@
+@model ProductDetailViewModel
+@{
+    ViewData["Title"] = Model.Product.Name;
+}
+
+@*
+    Breadcrumb dùng thẻ <nav aria-label="breadcrumb"> của Bootstrap: nó không chỉ
+    để trang trí mà là đường quay lại DUY NHẤT về danh mục đang xem, vì người dùng
+    có thể vào đây từ link chia sẻ chứ không phải từ trang danh sách.
+*@
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0 small">
+        <li class="breadcrumb-item">
+            <a asp-controller="Home" asp-action="Index">Trang chủ</a>
+        </li>
+        <li class="breadcrumb-item">
+            @* Lọc theo đúng danh mục của sản phẩm — cùng tham số mà form lọc dùng. *@
+            <a asp-controller="Home" asp-action="Index"
+               asp-route-categoryId="@Model.Product.CategoryId">@Model.Product.Category.Name</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">@Model.Product.Name</li>
+    </ol>
+</nav>
+
+<div class="row g-4 mb-5" data-product-detail="@Model.Product.Id">
+
+    @* ───────────── Ảnh ───────────── *@
+    <div class="col-12 col-lg-6">
+        <div class="es-detail-img-wrap">
+            @if (string.IsNullOrEmpty(Model.Product.ImageUrl))
+            {
+                <div class="es-product-img-placeholder">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="3" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21,15 16,10 5,21" />
+                    </svg>
+                    <span>Chưa có ảnh</span>
+                </div>
+            }
+            else
+            {
+                @* alt lấy từ tên sản phẩm: người dùng trình đọc màn hình và trường
+                   hợp ảnh hỏng đều cần biết đây là ảnh của cái gì. *@
+                <img src="@Model.Product.ImageUrl" alt="@Model.Product.Name" />
+            }
+        </div>
+    </div>
+
+    @* ───────────── Thông tin và nút mua ───────────── *@
+    <div class="col-12 col-lg-6">
+        <span class="es-product-cat-badge position-static d-inline-block mb-2">
+            @Model.Product.Category.Name
+        </span>
+
+        <h1 class="es-detail-name" data-ten-san-pham>@Model.Product.Name</h1>
+
+        @*
+            ToMoneyText() chứ không ToString("N0"): helper khoá vào InvariantCulture
+            nên cùng một con số ra cùng một chuỗi bất kể locale của MÁY CHẠY SERVER.
+            Gọi thẳng ToString("N0") thì máy en-US in 111,000 còn máy vi-VN in 111.000.
+        *@
+        <p class="es-detail-price" data-gia-ban>
+            @Model.Product.Price.ToMoneyText()<small> đ</small>
+        </p>
+
+        @*
+            ★ CHỈ in TRẠNG THÁI, không in con số tồn kho.
+
+            Đây là quy ước của rules/web.md, và trang này là chỗ dễ vi phạm nhất:
+            phản xạ tự nhiên khi làm ô nhập số lượng là viết max="@Model.Product.Stock",
+            và thế là con số tồn kho của TOÀN SHOP nằm sẵn trong HTML cho bất kỳ ai
+            chạy một vòng curl. Trần 100 dưới kia trùng đúng với [Range(1, 100)] của
+            AddToCartRequest, còn giới hạn thật theo tồn kho do CartService kẹp.
+        *@
+        @* Badge dùng đúng khuôn của _ProductCard để hai trang trông cùng một hệ. *@
+        <div class="mb-4" data-tinh-trang-hang>
+            @if (Model.ConHang)
+            {
+                <span class="badge rounded-pill border border-success border-opacity-25 px-3 py-2"
+                      style="background-color: #E6F4EA; color: #10B981;">
+                    &bull; Còn hàng
+                </span>
+            }
+            else
+            {
+                <span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-3 py-2">
+                    &bull; Hết hàng
+                </span>
+            }
+        </div>
+
+        @if (Model.ConHang)
+        {
+            @*
+                Vẫn là form POST thường và VẪN chạy khi tắt JavaScript: CartController
+                phục vụ cả request AJAX lẫn form thường (Post-Redirect-Get).
+
+                data-cart-add là hook để cart-dropdown.js chặn submit và gửi bằng fetch,
+                y hệt nút trên thẻ sản phẩm. Đổi tên thuộc tính này là querySelector trả
+                null và JS ngừng chạy trong im lặng — không lỗi build, không lỗi runtime.
+                Vì vậy nó có test riêng.
+            *@
+            <form asp-controller="Cart" asp-action="Add" method="post"
+                  class="d-flex align-items-end gap-3 flex-wrap mb-4" data-cart-add>
+                <input type="hidden" name="ProductId" value="@Model.Product.Id" />
+
+                <div>
+                    <label for="quantity" class="form-label small text-muted mb-1">Số lượng</label>
+                    @*
+                        type="number" chứ không text: chuẩn HTML bắt input number luôn
+                        gửi giá trị ở dạng chuẩn hoá, không phụ thuộc locale trình duyệt.
+
+                        max="100" là trần của AddToCartRequest, KHÔNG phải tồn kho —
+                        xem ghi chú ở khối trạng thái phía trên. Thuộc tính max ở đây
+                        chỉ để trình duyệt chặn sớm; server vẫn kiểm lại, vì mọi thứ
+                        đến từ client đều có thể bị sửa.
+                    *@
+                    <input type="number" id="quantity" name="Quantity" value="1"
+                           min="1" max="100" step="1"
+                           class="form-control es-detail-qty" data-so-luong />
+                </div>
+
+                <button type="submit"
+                        class="btn btn-primary fw-semibold rounded-2 px-5 py-2 es-btn-add-cart es-btn-add-cart-lg"
+                        style="background-color: #2563EB; border-color: #2563EB;">
+                    Thêm vào giỏ
+                </button>
+            </form>
+        }
+        else
+        {
+            @*
+                Không hiện nút bấm vào ra lỗi — cùng nguyên tắc với đơn Pending ở
+                trang "Đơn hàng của tôi": thà nói rõ là chưa làm được còn hơn mời
+                người dùng bấm một nút chỉ để nhận thông báo từ chối.
+            *@
+            <div class="alert alert-secondary small mb-4" role="status">
+                Sản phẩm đang tạm hết hàng nên chưa thể thêm vào giỏ.
+                Bạn có thể xem các sản phẩm tương tự bên dưới.
+            </div>
+        }
+
+        <ul class="es-cart-perks list-unstyled small mb-0">
+            <li class="es-cart-perk-item">Hàng chính hãng, nguyên seal</li>
+            <li class="es-cart-perk-item">Thanh toán khi nhận hàng hoặc qua VNPay</li>
+            <li class="es-cart-perk-item">Đổi trả trong 7 ngày nếu lỗi nhà sản xuất</li>
+        </ul>
+    </div>
+</div>
+
+@* ───────────── Gợi ý cùng danh mục ───────────── *@
+@if (Model.CoGoiY)
+{
+    <div class="mb-3">
+        <h2 class="es-section-title h4">Sản phẩm tương tự</h2>
+        <p class="es-section-subtitle">Cùng danh mục @Model.Product.Category.Name</p>
+    </div>
+
+    @*
+        Dùng lại _ProductCards — cùng khuôn thẻ với trang chủ và với nút "Xem thêm".
+        Markup thẻ sản phẩm chỉ tồn tại MỘT chỗ duy nhất; đây chính là lợi ích đã
+        đánh đổi khi chọn PartialView thay vì Json cho /Product/LoadMore.
+
+        _ProductCards cố ý không bọc thẻ nào, nên .col vẫn là con TRỰC TIẾP của .row.
+    *@
+    <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-3" data-san-pham-lien-quan>
+        <partial name="_ProductCards" model="Model.SanPhamLienQuan" />
+    </div>
+}

@@ -1,0 +1,82 @@
+@using MiniMart.Common
+@using MiniMart.Domain.ValueObjects
+@model PagedResult<OrderSummary>
+@{
+    ViewData["Title"] = "Đơn hàng của tôi";
+}
+
+<h1 class="h3 mb-4">Đơn hàng của tôi</h1>
+
+@if (Model.TotalCount == 0)
+{
+    @* Trạng thái rỗng phải có LỐI ĐI TIẾP, không chỉ một câu thông báo: người mới
+       đăng ký nhìn thấy màn hình này đầu tiên. *@
+    <div class="alert alert-light border">
+        <p class="mb-2">Bạn chưa có đơn hàng nào.</p>
+        <a class="btn btn-primary btn-sm" asp-controller="Home" asp-action="Index">Bắt đầu mua sắm</a>
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">Mã đơn</th>
+                    <th scope="col">Ngày đặt</th>
+                    <th scope="col">Số lượng</th>
+                    <th scope="col">Tổng tiền</th>
+                    <th scope="col">Trạng thái</th>
+                    <th scope="col"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var don in Model.Items)
+                {
+                    <tr data-don-hang="@don.Id">
+                        <td><strong>#@don.Id</strong></td>
+
+                        @*
+                            CreatedAt lưu bằng UTC (DateTime.UtcNow lúc đặt hàng), nên
+                            phải đổi sang giờ Việt Nam trước khi hiện - nếu không khách
+                            đặt lúc 8h sáng sẽ thấy "1:00".
+
+                            Offset +7 đóng cứng, KHÔNG tra TimeZoneInfo theo tên: tên
+                            khác nhau giữa Windows ("SE Asia Standard Time") và Linux
+                            ("Asia/Ho_Chi_Minh") nên tra theo tên là chạy ở máy dev và
+                            đổ trên CI. Cùng lý do với vnp_CreateDate ở VNPay.
+                        *@
+                        <td>@don.CreatedAt.AddHours(7).ToString("dd/MM/yyyy HH:mm")</td>
+
+                        <td>@don.TongSoLuong</td>
+                        <td>@don.TotalAmount.ToMoneyText() đ</td>
+                        <td>
+                            <span class="badge @don.Status.ToBadgeClass()">@don.Status.ToText()</span>
+                        </td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-secondary"
+                               asp-action="Details" asp-route-id="@don.Id">Xem chi tiết</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center">
+        <span class="text-muted small">
+            Trang @Model.Page / @Model.TotalPages &middot; @Model.TotalCount đơn hàng
+        </span>
+
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                    <a class="page-link" asp-action="Index" asp-route-page="@(Model.Page - 1)">Trước</a>
+                </li>
+                <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                    <a class="page-link" asp-action="Index" asp-route-page="@(Model.Page + 1)">Sau</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+}

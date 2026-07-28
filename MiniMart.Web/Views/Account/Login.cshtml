@@ -1,40 +1,126 @@
 @model MiniMart.Web.Models.LoginViewModel
 @{
     ViewData["Title"] = "Đăng nhập";
+    Layout = null; @* Render full-page, bỏ navbar/footer của _Layout.cshtml *@
 }
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — ElectroShop</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/auth.css" asp-append-version="true" />
+</head>
+<body class="auth-page">
+<div class="auth-wrapper">
 
-<div class="row justify-content-center">
-    <div class="col-md-5">
-        <h2>Đăng nhập</h2>
-
-        <form asp-action="Login" asp-route-returnUrl="@ViewData["ReturnUrl"]" method="post">
-            @* Lỗi "sai tên đăng nhập hoặc mật khẩu" gắn vào string.Empty nên
-               hiện ở đây, không gắn với ô nhập nào cả. *@
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-
-            <div class="mb-3">
-                <label asp-for="Username" class="form-label"></label>
-                <input asp-for="Username" class="form-control" autocomplete="username" />
-                <span asp-validation-for="Username" class="text-danger"></span>
+    @* ========== Cột trái: Brand Panel ========== *@
+    <aside class="auth-brand-panel" aria-hidden="true">
+        <div class="auth-glow-bottom"></div>
+        <div class="auth-brand-content">
+            <div class="auth-brand-logo">
+                @* Icon giỏ hàng / tia sét *@
+                <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#4f8ef7"/>
+                            <stop offset="100%" stop-color="#00d4ff"/>
+                        </linearGradient>
+                    </defs>
+                    <rect width="48" height="48" rx="14" fill="url(#lg1)" opacity="0.15"/>
+                    <path d="M8 10h4l6 22h18l4-16H16" stroke="url(#lg1)" stroke-width="2.5"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="20" cy="36" r="2.5" fill="url(#lg1)"/>
+                    <circle cx="32" cy="36" r="2.5" fill="url(#lg1)"/>
+                </svg>
+                <span class="auth-brand-name">ElectroShop</span>
             </div>
 
-            <div class="mb-3">
-                <label asp-for="Password" class="form-label"></label>
-                <input asp-for="Password" class="form-control" autocomplete="current-password" />
-                <span asp-validation-for="Password" class="text-danger"></span>
+            <p class="auth-brand-tagline">Công nghệ đỉnh cao · Giá tốt nhất</p>
+
+            <ul class="auth-brand-features" role="list">
+                <li class="auth-feature-item">
+                    <span class="auth-feature-icon" aria-hidden="true">⚡</span>
+                    <span>Giao hàng siêu tốc trong ngày</span>
+                </li>
+                <li class="auth-feature-item">
+                    <span class="auth-feature-icon" aria-hidden="true">🛡️</span>
+                    <span>Bảo hành chính hãng 24 tháng</span>
+                </li>
+                <li class="auth-feature-item">
+                    <span class="auth-feature-icon" aria-hidden="true">💳</span>
+                    <span>Thanh toán an toàn, bảo mật</span>
+                </li>
+                <li class="auth-feature-item">
+                    <span class="auth-feature-icon" aria-hidden="true">🔄</span>
+                    <span>Đổi trả miễn phí trong 30 ngày</span>
+                </li>
+            </ul>
+        </div>
+    </aside>
+
+    @* ========== Cột phải: Form ========== *@
+    <main class="auth-form-panel" id="main-content">
+        <div class="auth-form-box">
+
+            @* Mini logo trên mobile *@
+            <div class="auth-mobile-header">
+                <svg viewBox="0 0 32 32" fill="none" width="32" height="32">
+                    <path d="M4 6h3l4 15h12l3-11H10" stroke="#4f8ef7" stroke-width="2"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="13" cy="25" r="2" fill="#4f8ef7"/>
+                    <circle cx="22" cy="25" r="2" fill="#4f8ef7"/>
+                </svg>
+                <strong style="color:#e6edf3;font-size:1.1rem;">ElectroShop</strong>
             </div>
 
-            <div class="form-check mb-3">
-                <input asp-for="RememberMe" class="form-check-input" />
-                <label asp-for="RememberMe" class="form-check-label"></label>
-            </div>
+            <h1 class="auth-form-title">Chào mừng trở lại</h1>
+            <p class="auth-form-subtitle">Đăng nhập để tiếp tục mua sắm</p>
 
-            <button type="submit" class="btn btn-primary">Đăng nhập</button>
-            <a asp-action="Register" class="btn btn-link">Tạo tài khoản mới</a>
-        </form>
-    </div>
+            <form asp-action="Login" asp-route-returnUrl="@ViewData["ReturnUrl"]" method="post" novalidate>
+
+                @* Lỗi "sai tên đăng nhập hoặc mật khẩu" gắn vào string.Empty *@
+                <div asp-validation-summary="ModelOnly" class="text-danger" role="alert"></div>
+
+                <div class="auth-field">
+                    <label asp-for="Username"></label>
+                    <input asp-for="Username" class="form-control"
+                           autocomplete="username"
+                           placeholder="Nhập tên đăng nhập" />
+                    <span asp-validation-for="Username" class="text-danger"></span>
+                </div>
+
+                <div class="auth-field">
+                    <label asp-for="Password"></label>
+                    <input asp-for="Password" class="form-control"
+                           autocomplete="current-password"
+                           placeholder="Nhập mật khẩu" />
+                    <span asp-validation-for="Password" class="text-danger"></span>
+                </div>
+
+                <div class="auth-check">
+                    <input asp-for="RememberMe" class="form-check-input" id="rememberMeCheck" />
+                    <label asp-for="RememberMe" class="form-check-label" for="rememberMeCheck"></label>
+                </div>
+
+                <button type="submit" class="auth-btn-submit" id="loginSubmitBtn">
+                    Đăng nhập
+                </button>
+
+                <div class="auth-divider"><span>Chưa có tài khoản?</span></div>
+
+                <div class="auth-switch-link">
+                    <a asp-action="Register">Tạo tài khoản mới →</a>
+                </div>
+            </form>
+        </div>
+    </main>
+
 </div>
 
-@section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-}
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+<script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+</body>
+</html>

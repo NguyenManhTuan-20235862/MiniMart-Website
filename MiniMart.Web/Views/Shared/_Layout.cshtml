@@ -1,67 +1,142 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+@inject MiniMart.Application.Interfaces.ICartService CartService
+@{
+    @* Đọc một lần cho cả layout. Đặt trong @{} chứ không gọi trực tiếp trong
+       markup để tránh gọi hai lần (một lần cho badge, một lần cho dropdown). *@
+    var GioHang = await CartService.GetCartAsync();
+    var SoMonTrongGio = GioHang.TotalQuantity;
+    var tuKhoaTimKiem = Context.Request.Query["search"].ToString();
+
+    @* Tô sáng mục menu đang mở. Nhận NHIỀU tên controller vì một mục menu có thể
+       đại diện cho nhiều trang: "Sản phẩm" phải sáng ở cả trang danh sách (Home)
+       lẫn trang chi tiết (Product).
+
+       So sánh không phân biệt hoa thường: RouteData giữ nguyên cách viết trong URL
+       mà URL thì không phân biệt hoa thường - "/product/details/5" phải sáng y hệt
+       "/Product/Details/5". *@
+    string IsActiveMenu(params string[] controllers)
+    {
+        var hienTai = ViewContext.RouteData.Values["controller"]?.ToString();
+
+        return controllers.Contains(hienTai, StringComparer.OrdinalIgnoreCase) ? "active" : string.Empty;
+    }
+}
+<!DOCTYPE html>
+<html lang="vi">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - MiniMart.Web</title>
+    <title>@ViewData["Title"] — ElectroShop</title>
     <script type="importmap"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..900;1,300..900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/MiniMart.Web.styles.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        <nav class="navbar navbar-expand-md es-navbar">
             <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">MiniMart.Web</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+
+                @* Brand *@
+                <a class="es-brand navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">
+                    <span class="es-brand-text text-white font-extrabold fs-4 me-3">ElectroShop</span>
+                </a>
+
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                        data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
+
+                <div class="navbar-collapse collapse d-md-inline-flex justify-content-between">
+
+                    @* Nav trái *@
+                    <ul class="navbar-nav flex-grow-1 align-items-center">
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+                            <a class="nav-link fw-semibold @IsActiveMenu("Home", "Product")" asp-area="" asp-controller="Home" asp-action="Index">Sản phẩm</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
-                        @* Ẩn link khỏi menu chỉ là trải nghiệm người dùng, KHÔNG phải
-                           bảo mật - [Authorize] trên controller mới là thứ chặn thật. *@
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Profile" asp-action="Index">Tài khoản</a>
+                                <a class="nav-link fw-semibold @IsActiveMenu("Order")" asp-area="" asp-controller="Order" asp-action="Index">Đơn hàng</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link fw-semibold @IsActiveMenu("Profile")" asp-area="" asp-controller="Profile" asp-action="Index">Tài khoản</a>
                             </li>
                         }
                         @if (User.IsInRole("Admin"))
                         {
-                            <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">Quản trị</a>
+                            <li class="nav-item es-nav-admin">
+                                <a class="nav-link fw-semibold" asp-area="Admin" asp-controller="Dashboard" asp-action="Index">
+                                    ⚙ Quản trị
+                                </a>
                             </li>
                         }
                     </ul>
 
-                    <ul class="navbar-nav">
+                    @* Nav phải *@
+                    <ul class="navbar-nav align-items-center gap-2">
+
+                        @* Thanh tìm kiếm Header giống hình 1 *@
+                        <li class="nav-item d-none d-lg-block me-2">
+                            <form method="get" asp-area="" asp-controller="Home" asp-action="Index" class="position-relative">
+                                <input type="text" name="search" class="form-control rounded-pill pe-4 ps-3 py-1 bg-white text-dark border-0"
+                                       value="@tuKhoaTimKiem" maxlength="100" placeholder="Tìm kiếm sản phẩm..." style="font-size: 0.8rem; width: 200px;" />
+                                <button type="submit" class="btn btn-sm text-muted position-absolute end-0 top-50 translate-middle-y me-2 p-0 border-0 bg-transparent" aria-label="Tìm kiếm">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                                </button>
+                            </form>
+                        </li>
+
+                        @* Giỏ hàng dropdown *@
+                        <li class="nav-item dropdown">
+                            <a class="nav-link es-cart-link position-relative d-flex align-items-center gap-1" href="#" role="button"
+                               id="cartDropdownToggle" data-bs-toggle="dropdown" aria-expanded="false"
+                               aria-label="Giỏ hàng">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                                     viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                    <path d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .485.379L2.89 3H14.5a.5.5 0 0 1 .49.598l-1 5a.5.5 0 0 1-.465.401l-9.397.472L4.415 11H13a.5.5 0 0 1 0 1H4a.5.5 0 0 1-.491-.408L2.01 3.607 1.61 2H.5a.5.5 0 0 1-.5-.5zM5 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm-7 1a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm7 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
+                                </svg>
+                                <span class="badge rounded-pill bg-danger" data-cart-count
+                                      hidden="@(SoMonTrongGio == 0 ? "hidden" : null)">@SoMonTrongGio</span>
+                            </a>
+
+                            <div class="dropdown-menu dropdown-menu-end p-0 shadow"
+                                 style="width: min(420px, 92vw);"
+                                 aria-labelledby="cartDropdownToggle"
+                                 data-cart-dropdown-container>
+                                <partial name="_CartDropdown" model="new MiniMart.Web.Models.CartTableViewModel(GioHang)" />
+                            </div>
+                        </li>
+
                         @if (User.Identity?.IsAuthenticated == true)
                         {
-                            <li class="nav-item">
-                                <span class="nav-link text-dark">Xin chào, <strong>@User.Identity.Name</strong></span>
+                            <li class="nav-item d-flex align-items-center">
+                                <a asp-area="" asp-controller="Profile" asp-action="Index" class="nav-greeting text-decoration-none" title="Xem trang tài khoản">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                        <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.25 10 8 10c-2.25 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+                                    </svg>
+                                    <strong>@User.Identity.Name</strong>
+                                </a>
                             </li>
                             <li class="nav-item">
-                                @* Logout là POST nên phải dùng form, không dùng thẻ <a>. *@
                                 <form asp-area="" asp-controller="Account" asp-action="Logout" method="post">
-                                    <button type="submit" class="btn btn-link nav-link text-dark">Đăng xuất</button>
+                                    <button type="submit" class="btn-logout" title="Đăng xuất" aria-label="Đăng xuất">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                                    </button>
                                 </form>
                             </li>
                         }
                         else
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Account" asp-action="Login">Đăng nhập</a>
+                                <a class="nav-link fw-semibold" asp-area="" asp-controller="Account" asp-action="Login">Đăng nhập</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-controller="Account" asp-action="Register">Đăng ký</a>
+                                <a class="nav-link fw-semibold text-primary" asp-area="" asp-controller="Account" asp-action="Register">Đăng ký</a>
                             </li>
                         }
                     </ul>
@@ -69,22 +144,59 @@
             </div>
         </nav>
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            <partial name="_StatusMessages" />
 
-            @RenderBody()
-        </main>
+    <div class="es-main-wrapper">
+        <div class="container py-4">
+            <main role="main">
+                <partial name="_StatusMessages" />
+                @RenderBody()
+            </main>
+        </div>
     </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - MiniMart.Web - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
+    @* Footer 3 cột chuẩn Image 1 *@
+    <footer class="es-footer border-0">
+        <div class="container py-4">
+            <div class="row g-4 mb-4">
+                <div class="col-lg-4 col-md-6">
+                    <h5 class="fw-bold text-dark mb-3">ElectroShop</h5>
+                    <p class="text-secondary small mb-0" style="max-width: 300px; line-height: 1.6;">
+                        Hệ thống phân phối thiết bị công nghệ hàng đầu, mang đến trải nghiệm mua sắm thông minh và uy tín.
+                    </p>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <h6 class="fw-bold text-primary text-uppercase small mb-3">Hỗ trợ khách hàng</h6>
+                    <ul class="list-unstyled small mb-0 d-flex flex-column gap-2 text-secondary">
+                        <li><a href="#" class="text-secondary text-decoration-none hover-primary">Chính sách bảo hành</a></li>
+                        <li><a href="#" class="text-secondary text-decoration-none hover-primary">Về chúng tôi</a></li>
+                        <li><a href="#" class="text-secondary text-decoration-none hover-primary">Liên hệ</a></li>
+                        <li><a href="#" class="text-secondary text-decoration-none hover-primary">Hệ thống cửa hàng</a></li>
+                    </ul>
+                </div>
+
+                <div class="col-lg-4 col-md-6">
+                    <h6 class="fw-bold text-primary text-uppercase small mb-3">Dịch vụ</h6>
+                    <ul class="list-unstyled small mb-0 d-flex flex-column gap-2 text-secondary">
+                        <li><a href="#" class="text-secondary text-decoration-none hover-primary">Giao hàng tận nơi</a></li>
+                        <li><a href="#" class="text-secondary text-decoration-none hover-primary">Đổi trả 30 ngày</a></li>
+                        <li><a href="#" class="text-secondary text-decoration-none hover-primary">Trả góp 0%</a></li>
+                        <li><a href="#" class="text-secondary text-decoration-none hover-primary">Thành viên ưu tiên</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="pt-3 border-top border-secondary border-opacity-10 text-center">
+                <span class="text-secondary small">&copy; 2024 ElectroShop. All rights reserved.</span>
+            </div>
         </div>
     </footer>
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    @* Dropdown giỏ hàng có ở mọi trang nên script nạp ở layout, không ở section Scripts. *@
+    <script src="~/js/cart-dropdown.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

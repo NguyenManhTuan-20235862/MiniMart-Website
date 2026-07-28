@@ -20,9 +20,14 @@ public class ProductFormViewModel
 
     // Dùng overload typeof(decimal) + chuỗi thay vì Range(0.01, ...) vì overload
     // kia nhận double, làm tròn nhị phân trước khi so sánh với decimal.
-    // ConvertValueInInvariantCulture: không có nó, máy dùng locale vi-VN sẽ hiểu
-    // "0.01" theo dấu phân cách thập phân là dấu phẩy và parse ra số khác hẳn.
+    //
+    // ★ CẦN CẢ HAI cờ culture. Bản trước ở đây chỉ có ConvertValueInInvariantCulture
+    // và đó là LỖI THẬT: cờ đó chỉ chi phối việc chuyển đổi GIÁ TRỊ đang kiểm, còn hai
+    // chuỗi CẬN vẫn được parse theo CurrentCulture. Trên máy vi-VN, "0.01" ném
+    // ArgumentException ngay trong lúc validate -> form Admin trả HTTP 500. Máy dev
+    // en-US không bao giờ tái hiện được.
     [Range(typeof(decimal), "0.01", "999999999",
+        ParseLimitsInInvariantCulture = true,
         ConvertValueInInvariantCulture = true,
         ErrorMessage = "Giá phải lớn hơn 0.")]
     [Display(Name = "Giá (VNĐ)")]
@@ -45,6 +50,24 @@ public class ProductFormViewModel
 
     /// <summary>Ảnh đang có, để form Edit hiển thị và giữ lại khi không chọn ảnh mới.</summary>
     public string? ExistingImageUrl { get; set; }
+
+    /// <summary>
+    /// Phiên bản bản ghi lúc form được MỞ, đi vòng qua client bằng hidden field.
+    ///
+    /// <para>
+    /// Nhận RowVersion từ client nghe như đúng thứ chống over-posting nói phải
+    /// tránh, nhưng KHÔNG phải: over-posting nguy hiểm vì nó cho phép sửa trường
+    /// mà người dùng không được phép sửa. Ở đây RowVersion là thứ client chỉ
+    /// ĐỌC rồi trả lại nguyên vẹn - gửi phiên bản CŨ chỉ khiến chính họ nhận lỗi
+    /// xung đột, gửi phiên bản MỚI thì tương đương vừa mở lại form. Không có
+    /// đặc quyền nào giành được.
+    /// </para>
+    /// <para>
+    /// byte[] được model binder mặc định giải mã từ Base64, nên view phải render
+    /// ra Base64 chứ không phải ToString() (byte[].ToString() ra "System.Byte[]").
+    /// </para>
+    /// </summary>
+    public byte[]? RowVersion { get; set; }
 
     /// <summary>Chỉ phục vụ hiển thị dropdown, không phải dữ liệu người dùng gửi lên.</summary>
     public IEnumerable<SelectListItem> Categories { get; set; } = [];

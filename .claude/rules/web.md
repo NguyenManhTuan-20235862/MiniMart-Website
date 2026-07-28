@@ -1,0 +1,340 @@
+# Quy ước tầng Web — Controller, Razor, JavaScript, upload
+
+Đọc file này trước khi sửa bất kỳ file nào trong `MiniMart.Web`.
+
+## Controller và form
+- Form dùng **ViewModel riêng**, không bind thẳng Entity (chống over-posting).
+- Mọi POST có `[ValidateAntiForgeryToken]`. Xoá phải là POST, không dùng GET.
+- Sau POST thành công luôn `RedirectToAction` (Post-Redirect-Get); thông báo qua `TempData`.
+- Khi `ModelState` không hợp lệ và render lại form: **nạp lại dropdown/SelectList**,
+  vì `<select>` không gửi danh sách lựa chọn lên server.
+- Controller bắt exception nghiệp vụ và chuyển thành `ModelState.AddModelError`
+  hoặc `TempData`, không tự quyết định nghiệp vụ.
+- Area Admin: controller đặt tên `ProductController`, KHÔNG phải `AdminProductController`
+  (Area đã cung cấp tiền tố `/Admin/`). Route area phải đăng ký trước route default.
+- Nhiều lệnh `await` trong cùng một action phải **nối tiếp**, không gói vào
+  `Task.WhenAll`: chúng dùng chung một `DbContext` (Scoped), mà `DbContext` không
+  thread-safe → "A second operation was started on this context instance".
+
+## Razor view và form lọc
+- Razor view **được phép nhận thẳng entity**, không bắt buộc DTO. Ba lý do dùng DTO
+  cho JSON đều không áp dụng: không serialize nên không có vòng lặp; chỉ trường nào
+  được `@` mới ra HTML; Razor được biên dịch nên đổi tên property là lỗi build.
+  Đừng áp dụng máy móc "lúc nào cũng phải DTO".
+- Form lọc/tìm kiếm dùng **GET**, không POST: kết quả nằm trong URL nên bookmark,
+  chia sẻ link và bấm Back/Refresh đều hoạt động.
+- Sau khi lọc phải giữ `selected` trong dropdown, nếu không người dùng mất dấu
+  mình đang xem gì.
+- Hiển thị **trạng thái** còn/hết hàng, KHÔNG hiện con số tồn kho ra HTML.
+- Bộ lọc dùng ở NHIỀU action phải gộp thành **một type** (`ProductFilter`), không để mỗi
+  action khai báo tham số rời. `HomeController.Index` và `ProductController.LoadMore` bắt
+  buộc nhận cùng bộ lọc; hai danh sách tham số giống nhau thì không có gì ngăn chúng lệch
+  nhau khi thêm filter mới. Thêm property vào type là cả hai nhận được ngay.
+- Input đặt `name` **thủ công** (`name="minPrice"`) thay vì `asp-for="Filter.MinPrice"`:
+  `asp-for` sinh `name="Filter.MinPrice"` và URL thành `?Filter.MinPrice=1000` — dài, và
+  lệch với tham số mà endpoint phân trang nhận. Đổi lại phải tự đổ `value` và tự hiện lỗi
+  bằng `asp-validation-summary`.
+- Trang **xem hàng** vẫn truy vấn bình thường khi `ModelState` không hợp lệ (chỉ hiện cảnh
+  báo), khác form **ghi dữ liệu** (chặn hẳn). Chặn ở trang xem hàng là người dùng chỉ thấy
+  trang trống.
+- **`HtmlEncoder.Create(UnicodeRanges.All)`** phải được đăng ký trong `Program.cs`. Mặc
+  định escape mọi ký tự non-ASCII nên `"Khoảng giá"` do Razor sinh ra thành
+  `"Kho&#x1EA3;ng gi&#xE1;"` — vẫn hiển thị đúng nhưng HTML phình to, không đọc được khi
+  debug, và mọi test assert chuỗi tiếng Việt do `@` sinh ra sẽ đỏ. `UnicodeRanges.All`
+  VẪN escape `< > & " '` nên không hở XSS.
+- Partial dùng lại được đặt ở `Views/Shared` (VD `_ProductCard.cshtml`).
+- Ô nhập số (giá, số lượng) trong form lọc dùng `type="number"`, KHÔNG dùng `type="text"`.
+  Theo chuẩn HTML, `input type="number"` luôn gửi giá trị ở dạng chuẩn hoá (dấu `.`
+  thập phân) bất kể locale trình duyệt. Với `type="text"`, người dùng vi-VN gõ
+  `1.000.000` thì model binding trả `null` **trong im lặng** (query string được bind
+  bằng `InvariantCulture`) — không có lỗi nào báo, chỉ là bộ lọc không có tác dụng.
+- Giữ lại giá trị đã nhập cho **mọi** ô lọc, không chỉ dropdown. Điều kiện hiện link
+  "Xoá lọc" phải xét tất cả filter (`HasAnyFilter`), nếu chỉ xét một cái thì người lọc
+  bằng cái còn lại không có đường quay về.
+- Bộ lọc "vô lý nhưng hợp lệ" (VD `minPrice > maxPrice`) phải **cảnh báo**, không im
+  lặng trả về rỗng: SQL đúng nhưng người dùng sẽ tưởng shop hết hàng.
+
+## Form đặt hàng (`/Checkout`) — ViewModel lai và đường render lỗi
+
+`CheckoutViewModel` vừa là model để RENDER (chứa `CartView`) vừa là tham số của action
+POST. Type lai như vậy tiện nhưng có hai ràng buộc bắt buộc:
+
+- Property chỉ-đi-ra như `Cart` phải có **`[BindNever]`** (+ `[ValidateNever]`). Thiếu nó
+  thì model binder sẵn sàng nhận `Cart.Lines[0].UnitPrice=1` từ form. Hôm nay chưa gây hại
+  vì `CheckoutAsync` đọc giỏ từ DB — nhưng đó là an toàn nhờ THỨ TỰ ĐỌC, không phải nhờ
+  cấu trúc. Đã mutation test: gỡ `[BindNever]` thì **test hành vi vẫn xanh, chỉ test cấu
+  trúc (reflection) đỏ**. Cùng bài học với test cấu trúc chống IDOR ở `cart.md`.
+- Hệ quả bắt buộc nhớ: sau model binding, property `[BindNever]` **rỗng**. Đường render lại
+  form phải tự nạp lại nó — đúng khuôn "ModelState hỏng thì nhớ nạp lại dropdown".
+
+**POST đặt hàng thất bại thì RENDER LẠI form, không redirect.** Đây là thay đổi so với quy
+ước cũ, và lý do đổi là form địa chỉ vừa xuất hiện: redirect vứt sạch dữ liệu người dùng vừa
+gõ, nên họ mất địa chỉ chỉ vì có người khác mua trước — lỗi không phải của họ. PRG **vẫn giữ
+nguyên cho nhánh THÀNH CÔNG** (nơi F5 tạo đơn trùng); gửi lại một POST đã thất bại không tạo
+ra đơn thứ hai nào. Ngoại lệ duy nhất còn redirect là **giỏ rỗng** — không còn gì để render.
+
+⚠ Bẫy test đã suýt lọt: test "render lại thì vẫn thấy giỏ hàng" khẳng định HTML chứa tên sản
+phẩm và tổng tiền. Khi bỏ bước nạp lại `Cart`, controller tưởng giỏ đã hết nên redirect sang
+`/Cart` — mà trang đó đọc giỏ THẬT từ DB nên vẫn in đúng tên và tổng tiền, và test **vẫn
+xanh**. Phải thêm assertion "vẫn đang ở đúng trang" (`action="/Checkout/Confirm"`) mới bắt
+được. Khẳng định nội dung là chưa đủ khi trang khác cũng in ra nội dung đó.
+
+- Ô **số điện thoại** dùng `type="tel"`, KHÔNG `type="number"`. Số điện thoại không phải một
+  con số: `type="number"` làm mất số 0 đứng đầu và chặn dấu `+` của mã quốc gia. Tiêu chí là
+  "giá trị có phải số để TÍNH TOÁN không", không phải "chuỗi có toàn chữ số không" — đây
+  chính là mặt trái của quy tắc `type="number"` cho ô giá ở form lọc.
+- Regex số điện thoại cố ý **dễ dãi**. Đầu số mới được cấp thêm theo thời gian, và regex chặt
+  âm thầm từ chối khách hàng thật — hỏng theo hướng đắt hơn nhiều so với việc lọt một chuỗi
+  vô nghĩa mà nhân viên giao hàng phát hiện ngay. Cùng lý do với việc mật khẩu không đòi ký
+  tự đặc biệt.
+- Địa chỉ là MỘT ô tự do, không tách tỉnh/huyện/xã: tách đúng đòi dữ liệu hành chính thật kèm
+  dropdown phụ thuộc nhau, mà danh mục đó còn đổi theo các đợt sáp nhập.
+
+## Trang chi tiết sản phẩm (`/Product/Details/{id}`)
+
+- Giữ **route mặc định**. Gắn `[HttpGet("Product/{id:int}")]` cho URL ngắn `/Product/5`
+  sẽ **TẮT** route mặc định cho chính action đó, nên `/Product/Details/5` chết theo —
+  trong khi `/Order/Details/3` đang dùng dạng dài. Một dự án hai kiểu URL đắt hơn cái
+  URL ngắn mang lại.
+- `id` không tồn tại → **404**, không phải 200 kèm trang trống: 200 là mời công cụ tìm
+  kiếm lập chỉ mục một trang rỗng, và người dùng không phân biệt được "không có thứ này"
+  với "trang bị lỗi". `id` không parse được cho ra `0` nên đi chung nhánh đó.
+
+### ★ Ô nhập số lượng là chỗ dễ làm lộ tồn kho nhất trong cả dự án
+Quy ước "chỉ hiện trạng thái còn/hết hàng" ở trên áp cho trang này gắt hơn mọi trang khác,
+vì phản xạ tự nhiên khi làm ô số lượng là `max="@Model.Product.Stock"` — và thế là bảng
+tồn kho của **toàn shop** nằm sẵn trong HTML cho bất kỳ ai chạy một vòng `curl`.
+
+| | |
+|---|---|
+| Trần trong HTML | `max="100"` — đúng trần của `AddToCartRequest.[Range(1, 100)]` |
+| Giới hạn thật theo tồn kho | `CartService` kẹp, kèm thông báo |
+
+⚠ Phải nói rõ một điều để quy ước không bị hiểu là tuyệt đối: thông báo của `CartService`
+là *"chỉ còn {Stock}"*, nên con số **vẫn lộ** — chỉ khác là lộ khi khách chủ động thử mua
+nhiều hơn số có. Đó là tiết lộ **theo yêu cầu để giải thích một hành động**, không phải
+xuất bản trên mọi lượt xem. Đã mutation test: đổi `max="100"` thành `max="@…Stock"` → 1 đỏ.
+
+### Link sang trang chi tiết bọc ẢNH và TÊN, không bọc cả thẻ
+`_ProductCard` chứa `<form>` thêm vào giỏ, mà **`<form>` lồng trong `<a>` là HTML không
+hợp lệ**: trình duyệt tự sửa cây DOM theo cách của nó và nút bấm hỏng theo những kiểu khó
+đoán. Badge danh mục cũng cố ý nằm ngoài `<a>` — nó chồng lên ảnh nên bấm vào nó mà nhảy
+trang là đúng thứ người dùng KHÔNG mong đợi.
+
+⚠ Bài học test đắt nhất của phase này: bản đầu của test chống lồng thẻ dùng regex
+`<a\b[^>]*>(.*?)</a>` rồi tìm `<form` trong nhóm bắt được, và nó **LỌT** mutation "bọc cả
+thẻ trong `<a>`" — vì non-greedy nên với `<a>` ngoài cùng nó khớp tới `</a>` **đầu tiên**
+(của link ảnh bên trong) và không bao giờ nhìn thấy `<form>`. Regex không đếm được cấu
+trúc lồng nhau. Phải **đếm độ sâu** bằng cách quét `<a` / `</a>` / `<form`.
+
+### Gợi ý "sản phẩm tương tự"
+- Truy vấn ở Repository, không `Include` rồi lọc trong C#: cùng nguyên tắc read model ở
+  `data-access.md`.
+- **Sản phẩm còn hàng xếp lên trước** (`OrderByDescending(p => p.Stock > 0)`), vì gợi ý
+  một món không mua được là gợi ý vô ích. Đây là loại sai không có triệu chứng: trang vẫn
+  hiện đủ bốn thẻ, chỉ là một thẻ vô dụng. Dữ liệu test phải có một món hết hàng đứng
+  **đầu bảng chữ cái**, nếu không mutation "chỉ `OrderBy(Name)`" sẽ lọt.
+- `Take` cần **tie-breaker duy nhất** y hệt `Skip`/`Take` của phân trang.
+- Danh sách rỗng (danh mục chỉ có đúng sản phẩm đang xem) là kết cục **bình thường**:
+  view không render khu vực đó. Hiện tiêu đề "Sản phẩm tương tự" trên một khoảng trắng
+  tệ hơn không hiện gì.
+- ⚠ Khu gợi ý cũng render `_ProductCard`, tức cũng có `/Cart/Add` của riêng nó. Test về
+  sản phẩm ĐANG XEM phải **bóc riêng khối chính** trước khi assert — quét cả trang thì
+  "hết hàng không có nút thêm vào giỏ" đỏ dù code đúng, và tệ hơn, chiều ngược lại sẽ
+  **xanh** kể cả khi nút của sản phẩm chính biến mất.
+
+## Bảng sửa hàng loạt — đặt tên input và đánh dấu dòng hỏng
+
+- Chỉ số `Items[i]` phải **liên tục từ 0**. Binder đọc `Items[0]`, `Items[1]`… và **dừng
+  ở chỉ số đầu tiên thiếu**, âm thầm bỏ toàn bộ phần còn lại. Vì vậy dùng `for` với chỉ
+  số, KHÔNG `foreach` (sinh `name="Price"` không chỉ số, mọi dòng trùng tên), và tuyệt
+  đối không lấy `Id` làm chỉ số.
+- ⚠ **Hệ quả bị bỏ sót nhiều nhất: TUYỆT ĐỐI không `disabled` ô nhập của dòng đang
+  hỏng.** Nghe rất hợp lý ("dòng này conflict, khoá lại"), nhưng trình duyệt **không
+  gửi** input `disabled` → chỉ số đứt quãng → binder bỏ mọi dòng phía sau → người dùng
+  nhận redirect "đã lưu" trong khi nửa bảng chưa từng tới server. Muốn khoá thì dùng
+  `readonly` (vẫn được gửi). Có test hành vi khoá điều này
+  (`Chi_so_DUT_QUANG_thi_binder_am_tham_bo_phan_con_lai`) — nó kiểm một hành vi của
+  framework chứ không phải code dự án, và đó chính là lý do nó đáng tồn tại: nó biến một
+  lời dặn trong comment thành điều đo được.
+- `RowVersion` render Base64 **thủ công**, mỗi dòng một giá trị. Xem `concurrency.md`.
+- Kết quả xung đột phải hiện **ngay trên dòng**, không chỉ trong một câu ở đầu trang:
+  bảng 20 dòng mà thông báo chỉ nêu tên thì Admin phải đối chiếu bằng mắt giữa một đoạn
+  văn và 20 dòng — việc máy làm được còn người thì làm sai. Dòng mang theo **giá trị
+  hiện tại của người kia**, vì "có xung đột" một mình không trả lời được câu hỏi nào.
+- Bị **sửa** và bị **xoá** phải trông KHÁC nhau (`table-warning` vs `table-danger`): hai
+  tình huống đòi hai hành động khác nhau — một cái bấm Lưu lần nữa là xong, một cái bấm
+  bao nhiêu lần cũng vô ích, phải tải lại trang. Dùng chung một màu là nói với người
+  dùng rằng chúng giống nhau.
+- Không hiện "Hiện tại: 0 đ / tồn kho 0" cho sản phẩm đã bị xoá — đó là in ra hai con số
+  bịa như thể chúng là sự thật.
+- Test về "dòng nào được đánh dấu" phải bóc **đúng thẻ `<tr>` đó** rồi mới assert.
+  `html.Contains("table-warning")` vẫn xanh y hệt khi code tô nhầm cả bảng.
+
+## Định dạng số ở tầng hiển thị
+- Dùng `MoneyFormat.ToMoneyText()` (`MiniMart.Web/Extensions`) chứ không gọi trực tiếp
+  `ToString("N0")`. Helper khoá vào `InvariantCulture` để cùng một số ra cùng một chuỗi
+  bất kể locale của máy chạy.
+- Lý do cứng: ASP.NET Core **không** set `CurrentCulture` theo request nếu chưa thêm
+  Request Localization, nên nó bằng locale của OS. Máy dev en-US in `111,000`, máy triển
+  khai vi-VN in `111.000` — cùng một dòng code, hai kết quả, và test nào assert trên
+  chuỗi giá sẽ đỏ khi đổi máy.
+- Cảnh báo nếu sau này thêm `CultureInfo.DefaultThreadCurrentCulture = "vi-VN"`: form
+  POST được bind bằng `CurrentCulture`, nên form Admin sẽ parse `1000.50` thành `100050`.
+
+## Request AJAX bổ sung dữ liệu vào trang đang mở: PartialView, KHÔNG phải JSON
+Quy tắc mặc định của dự án: request AJAX mà kết quả **chỉ để hiển thị** thì trả
+`PartialView()`. Đã cân nhắc và loại `Json()` cho `/Product/LoadMore`.
+- Lý do quyết định: markup thẻ sản phẩm chỉ được định nghĩa **một lần** ở
+  `_ProductCard.cshtml`. Trả JSON thì client phải dựng lại markup bằng JavaScript, tức
+  viết lần thứ hai cùng một giao diện + cùng cách định dạng tiền + cùng logic badge
+  còn/hết hàng, và phải tự escape XSS bằng tay vì **JSON không escape ký tự `<`**.
+- Lý do quan trọng không kém: HTML server render **test được bằng integration test**,
+  còn hàm dựng DOM trong JavaScript thì không có test nào chạm tới.
+- Chỉ chọn `Json()` khi thật sự có **client không phải trình duyệt** (mobile app), hoặc
+  client cần dữ liệu để tính toán chứ không phải để hiển thị. Ngoại lệ đã áp dụng:
+  `/Cart/Summary` trả `Json` vì badge cần một CON SỐ, không cần một khối HTML.
+
+### Ngoại lệ thứ hai: cập nhật TẠI CHỖ vài con số (dropdown giỏ hàng)
+Ba endpoint ghi của giỏ hàng (`/Cart/Add`, `/Cart/UpdateQuantity`, `/Cart/Remove`) trả
+`Json` khi request có `Accept: application/json`. Lý do: dropdown chỉ cần đổi số lượng
+của một dòng, thành tiền dòng đó, tổng cộng và badge. Thay cả khối HTML làm dropdown
+nhấp nháy và mất vị trí cuộn.
+
+Ngoại lệ này chỉ hợp lệ khi giữ ĐỦ HAI ràng buộc dưới đây. Thiếu một trong hai là quay
+về đúng cái mà quy ước muốn tránh — **đừng nới ra**:
+
+1. **Server định dạng sẵn mọi số tiền** trong DTO (`TotalText`, `LineTotalText` qua
+   `MoneyFormat`). JavaScript TUYỆT ĐỐI không tự format tiền, không tự cộng trừ tổng.
+   Bỏ `TotalText` đi là cách in tiền tồn tại ở hai nơi rồi lệch nhau theo locale.
+2. **DTO chỉ đủ để GÁN vào node có sẵn, không đủ để dựng markup.** Việc dựng HTML vẫn
+   thuộc Razor: `GET /Cart/Dropdown` trả `_CartDropdown`. Chia việc theo LOẠI thay đổi —
+   đổi con số thì JSON, đổi cấu trúc (thêm dòng, giỏ thành rỗng) thì tải lại partial.
+   Vì vậy DTO trả về **đúng dòng vừa tác động**, không trả cả giỏ: trả cả giỏ sẽ dụ người
+   viết JS lặp qua nó và dựng lại danh sách.
+
+Hệ quả về markup và test:
+- Hook cho JavaScript là thuộc tính **`data-*`**, không phải `class` (class để tạo kiểu,
+  Bootstrap có thể đổi) và không phải `id` (không lặp lại được cho nhiều dòng).
+- Đổi tên một `data-*` trong Razor làm `querySelector` trả `null` và JS **im lặng ngừng
+  hoạt động** — không lỗi build, không lỗi runtime. Vì vậy mỗi hook phải có test khẳng
+  định nó còn trong HTML (`[Theory]` liệt kê từng hook). Đây là cách duy nhất kiểm soát
+  được file JS khi dự án chưa có Playwright.
+- Node mà JS cần cập nhật phải **luôn được server render**, chỉ ẩn/hiện. Badge giỏ hàng
+  KHÔNG được bọc trong `@if (count > 0)`: lần đầu thêm hàng vào giỏ rỗng sẽ không có node
+  nào để gán `textContent` và JS buộc phải tự tạo thẻ.
+- Endpoint có nhiều nhánh response thì **thứ tự kiểm tra là một phần của hợp đồng**:
+  `fetch` của dropdown gửi cả `Accept: application/json` và `X-Requested-With`, nên nhánh
+  JSON phải xét TRƯỚC nhánh PartialView. Đảo lại thì client nhận HTML và `response.json()`
+  ném ở chỗ chẳng liên quan.
+- Không so bằng `Request.Headers.Accept == "application/json"`: trình duyệt gửi cả danh
+  sách kèm q-value nên so bằng sẽ trượt. Dùng `Contains`.
+- KHÔNG dùng `View()` cho loại request này — nó gửi lại cả layout. Mỗi endpoint trả
+  partial phải có test khẳng định response **không** chứa `<!DOCTYPE`/`<html`/`navbar`;
+  `PartialView` → `View` là lỗi build-được-nhưng-sai, chỉ test mới bắt.
+- Partial trả về nhiều item: tạo partial bao (`_ProductCards.cshtml`) chỉ làm việc lặp,
+  và **không bọc thêm thẻ nào**. Output phải là dãy `.col` dán thẳng được vào `.row`;
+  thêm một tầng `div` là `.col` không còn con trực tiếp của `.row` → vỡ Bootstrap grid.
+- Metadata phân trang đi qua **HTTP response header** (`X-Next-Page`), vì body là HTML
+  nên không có chỗ đặt. Hết dữ liệu → header rỗng. Đặt tên header thành `const` trong
+  Controller để test tham chiếu cùng một hằng, không gõ lại chuỗi.
+- Giá trị header phải là **ASCII/latin1**. Số lượng đi được (`X-Cart-Count`), thông báo
+  tiếng Việt thì KHÔNG — nó phải đi trong thân response qua ViewModel.
+- Endpoint phân trang phải nhận **đúng bộ tham số lọc** như action render trang 1.
+  Thiếu một tham số là bấm "Xem thêm" xong nhận về sản phẩm đã bị loại ở trang 1.
+
+## Nếu về sau cần endpoint JSON thật
+- BẮT BUỘC dùng DTO riêng, TUYỆT ĐỐI không trả thẳng entity. Lý do cứng:
+  `Product.Category` ↔ `Category.Products` tạo vòng lặp tham chiếu, `System.Text.Json`
+  ném `JsonException: A possible object cycle was detected` → HTTP 500. Lỗi này CÓ ĐIỀU
+  KIỆN (chỉ xảy ra khi navigation được nạp), nên một `Include` thêm vào sau này có thể
+  làm sập endpoint đang chạy tốt.
+- Hai lý do còn lại: không lộ dữ liệu nội bộ (`RowVersion`, `Stock`), và hợp đồng JSON
+  không dính vào tên property của entity.
+- Làm phẳng navigation property (`CategoryName` thay vì `Category`) và chuyển thông tin
+  nghiệp vụ thành trạng thái (`InStock: bool` thay vì `Stock: int`) — DTO cũng là một
+  bề mặt lộ dữ liệu như HTML.
+- Đặt DTO ở `MiniMart.Web/Models`. `System.Text.Json` tự đổi sang camelCase.
+- Response phân trang phải kèm `HasNextPage`, nếu không client cuộn vô tận không biết dừng.
+
+## JavaScript gọi endpoint
+- Chèn HTML từ server bằng `insertAdjacentHTML('beforeend', html)`. An toàn vì Razor đã
+  escape ở server, và `insertAdjacentHTML` **không** thực thi thẻ `<script>` được chèn.
+- Nếu (và chỉ nếu) phải dựng DOM từ JSON: dữ liệu người dùng nhập BẮT BUỘC đi qua
+  `textContent`, chỉ dùng `innerHTML` cho khung HTML tĩnh. Razor tự escape
+  `@Model.Name`, JavaScript thì không.
+- Bộ lọc hiện tại truyền cho JS qua `data-*` **trên nút**, không đọc lại từ các ô input:
+  người dùng có thể sửa ô lọc mà chưa bấm "Lọc", lúc đó ô nhập và danh sách đang hiển
+  thị đã lệch nhau — phải phân trang theo bộ lọc ĐANG hiển thị.
+- Client bỏ hẳn tham số không có giá trị khỏi query string (`if (value) params.set(...)`),
+  đúng tinh thần `if (x.HasValue) query = query.Where(...)` ở Repository.
+- `fetch` **không** reject khi server trả 4xx/5xx (chỉ reject khi lỗi mạng) → luôn kiểm
+  tra `response.ok` trước khi đọc body. Bỏ qua bước này là dán HTML trang lỗi vào DOM.
+- Có cờ chặn double-click: `fetch` là bất đồng bộ nên bấm hai lần nhanh sẽ thêm cùng
+  một trang vào DOM hai lần.
+- Server là nơi duy nhất biết còn trang sau hay không — client đọc header, không tự suy
+  ra từ số item nhận được (`items.length < pageSize` sai khi trang cuối vừa đủ đầy).
+- `fetch()` không tự gửi `__RequestVerificationToken` như form HTML, nên token phải đi
+  qua header: `AddAntiforgery(o => o.HeaderName = "RequestVerificationToken")`.
+
+## Xử lý lỗi toàn cục (GlobalExceptionMiddleware)
+
+- **Đăng ký ĐẦU TIÊN** trong pipeline. Middleware là các lớp lồng nhau, và một
+  `try/catch` chỉ bắt được thứ ném ra từ BÊN TRONG nó — đăng ký muộn là mọi exception
+  của `UseRouting`, `UseSession`, `UseRateLimiter`, `UseAuthentication` đều thoát ra ngoài.
+- ⚠ **Đã GỠ `UseExceptionHandler("/Home/Error")`, và phải giữ nguyên như vậy.** Nó nằm
+  bên trong middleware của ta nên nó bắt TRƯỚC. Giữ cả hai thì ở **Production** —
+  môi trường duy nhất nó quan trọng — middleware này không bao giờ chạy, còn ở
+  Development thì lại chạy: thứ được test là thứ không chạy thật. Mutation: 2 đỏ.
+- Middleware **KHÔNG** ánh xạ exception nghiệp vụ (`NotFoundException`,
+  `ConcurrencyConflictException`) sang mã HTTP. Việc đó thuộc về Controller, nơi duy nhất
+  đủ ngữ cảnh để chọn giữa "render lại form giữ dữ liệu người dùng" và "trả 404". Thêm
+  bảng ánh xạ ở đây là tạo chỗ thứ hai cùng quyết định một việc. **Tới được middleware
+  nghĩa là đã có bug**, và câu trả lời đúng cho bug là 500.
+- Thương lượng JSON/HTML cần **HAI** tín hiệu: header `Accept` (dùng `Contains`, không so
+  bằng — trình duyệt gửi cả danh sách kèm q-value) **và** attribute `[JsonErrorResponse]`
+  trên action. Chỉ dựa vào `Accept` là endpoint server-to-server như
+  `/Payment/IpnAction` nhận về trang HTML tiếng Việt, vì máy chủ VNPay không cam kết gửi
+  header nào. Attribute đi cùng action nên không lệch được khi đổi route.
+- `GetEndpoint()` đọc được trong khối `catch` dù middleware đăng ký trước `UseRouting`:
+  thứ tự đăng ký quyết định đường đi VÀO, còn `catch` chạy trên đường đi RA.
+- IPN gặp lỗi chưa xử lý thì trả **500**, cố ý — ta thật sự chưa ghi nhận được thanh
+  toán, nên việc VNPay gửi lại là đúng mong muốn. Giả `RspCode = 00` ở đây là nói dối
+  rằng đã xử lý xong.
+- Bắt riêng `OperationCanceledException` khi `RequestAborted` đã huỷ (khách đóng tab) và
+  log ở mức **Information**. Log Error thì mỗi lần có người bấm Stop là một dòng đỏ, và
+  sự cố thật chìm giữa đám nhiễu.
+- Kiểm `Response.HasStarted` trước khi ghi: response đã bắt đầu gửi thì gán lại status
+  chỉ ném `InvalidOperationException` ngay trong khối `catch` — một lỗi thành hai, và lỗi
+  thứ hai che mất lỗi thứ nhất. Việc đúng là ném lại để kết nối bị ngắt.
+  ⚠ Nhánh này **chưa có test**: dựng một response đã flush dở đòi endpoint tự ghi rồi ném.
+- Trang lỗi HTML **tự chứa**, không đi qua Razor và không dùng `_Layout`: thứ vừa ném có
+  thể chính là layout hoặc một service mà layout cần, và khi đó render qua MVC là ném lần
+  thứ hai bên trong chính trình xử lý lỗi.
+- `HtmlEncode` cả mã truy vết lẫn nội dung exception: thông điệp exception thường chứa
+  dữ liệu người dùng nhập, ghép thẳng vào HTML là mở XSS ở đúng trang không ai nghĩ tới.
+- Production **chỉ** trả mã truy vết, không stack trace. Nhưng cũng **phải có** mã truy
+  vết: giấu sạch thì người dùng gọi hỗ trợ mà không nói được gì, còn ta không tra được
+  log của đúng request đó.
+
+## Layout
+- Khu vực quản trị dùng `Areas/Admin/Views/Shared/_AdminLayout.cshtml`, khai báo trong
+  `Areas/Admin/Views/_ViewStart.cshtml`. Trang khách hàng giữ `Views/Shared/_Layout.cshtml`.
+- Partial dùng chung cho cả hai (VD `_StatusMessages`) đặt ở `Views/Shared` — view trong
+  Area vẫn tìm thấy nhờ cơ chế fallback, không cần chép đôi.
+- Layout được phân giải lúc **chạy**, không phải lúc biên dịch: sai tên trong `_ViewStart`
+  thì `dotnet build` vẫn qua và chỉ nổ khi mở trang. Vì vậy mỗi layout phải có
+  integration test kiểm chứng đúng layout được dùng.
+
+## Upload file
+- **Tên file luôn do server sinh** (`Guid.NewGuid()` + phần mở rộng). TUYỆT ĐỐI không
+  dùng `file.FileName` làm tên lưu: mở đường cho path traversal và ghi đè lẫn nhau.
+- Whitelist phần mở rộng (`.jpg .jpeg .png .webp`) và giới hạn dung lượng bằng
+  **Data Annotation** — đây là ràng buộc tĩnh nên annotation dùng đúng chỗ.
+- DB chỉ lưu **đường dẫn tương đối**; file nằm trong `wwwroot`. Thư mục upload
+  đã được `.gitignore`.
+- Form có `input type="file"` BẮT BUỘC có `enctype="multipart/form-data"`.
+  Thiếu nó thì `IFormFile` luôn null và không có lỗi nào báo.
+- Trong luồng sửa, `imageUrl = null` nghĩa là **giữ ảnh cũ**, không phải xoá ảnh.
+- Thứ tự ghi/xoá: lưu file TRƯỚC khi gọi Service (lỗi thì chỉ dư file rác),
+  nhưng xoá file SAU khi DB xoá xong (lỗi thì bản ghi vẫn còn ảnh).

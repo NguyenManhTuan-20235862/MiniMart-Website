@@ -1,0 +1,221 @@
+@model ProductBulkUpdateViewModel
+@{
+    ViewData["Title"] = "Sửa giá / tồn kho hàng loạt";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+    <div>
+        <h1 class="es-section-title">Sửa giá / tồn kho hàng loạt</h1>
+        <p class="es-section-subtitle mb-0">Cập nhật nhanh thông tin nhiều sản phẩm trong một thao tác</p>
+    </div>
+    <a class="btn btn-outline-secondary fw-semibold shadow-sm" asp-action="Index">
+        ← Về danh sách sản phẩm
+    </a>
+</div>
+
+@if (Model.KhongCoDong)
+{
+    <div class="es-empty-state bg-white rounded-3 border p-5 text-center my-3">
+        <div class="es-empty-state-icon">⚡</div>
+        <h4 class="fw-bold mb-2">Chưa có sản phẩm nào</h4>
+        <p class="text-muted mb-0">Chưa có sản phẩm nào trong hệ thống để thực hiện sửa hàng loạt.</p>
+    </div>
+}
+else
+{
+    <form asp-action="BulkEdit" method="post">
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+        @*
+            Trang hiện tại đi vòng qua form để sau khi lưu còn quay lại đúng chỗ cũ.
+            Không có nó thì lưu xong luôn nhảy về trang 1.
+        *@
+        <input type="hidden" asp-for="Page" />
+
+        <div class="card es-checkout-card mb-4">
+            <div class="card-header fw-bold es-checkout-header d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="es-checkout-header-icon">⚡</span>
+                    Bảng cập nhật nhanh giá & tồn kho
+                </div>
+                <span class="badge bg-primary rounded-pill">Trang @Model.Page / @Model.TongSoTrang</span>
+            </div>
+
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table align-middle table-hover mb-0">
+                        <thead class="bg-light">
+                            <tr class="text-muted small">
+                                <th scope="col" class="ps-4">Sản phẩm</th>
+                                <th scope="col" style="width: 220px;">Giá bán (VNĐ)</th>
+                                <th scope="col" style="width: 180px;" class="pe-4">Tồn kho</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @*
+                                ★ BẮT BUỘC dùng `for` với chỉ số, KHÔNG dùng `foreach`.
+
+                                Với foreach thì asp-for="dong.Price" sinh ra name="Price" không
+                                có chỉ số: mọi dòng trùng tên nhau và model binder chỉ nhận được
+                                một giá trị duy nhất. Không lỗi build, không lỗi runtime - chỉ là
+                                19/20 dòng biến mất.
+
+                                Chỉ số phải LIÊN TỤC từ 0: binder đọc Items[0], Items[1]... và
+                                DỪNG ở chỉ số đầu tiên thiếu. Vì vậy tuyệt đối không dùng
+                                Items[@dong.Id] - id không bao giờ liên tục từ 0.
+
+                                ★ HỆ QUẢ cho các dòng bị xung đột bên dưới: TUYỆT ĐỐI không đặt
+                                `disabled` lên input của chúng, dù nghe rất hợp lý ("dòng này
+                                đang hỏng, khoá lại"). Trình duyệt KHÔNG gửi input disabled, nên
+                                dòng đó biến mất khỏi form, chỉ số đứt quãng, và binder âm thầm
+                                bỏ TOÀN BỘ phần còn lại của bảng. Muốn khoá thì dùng `readonly`
+                                - readonly vẫn được gửi.
+                            *@
+                            @for (var i = 0; i < Model.Items.Count; i++)
+                            {
+                                var xungDot = Model.Items[i].XungDot;
+
+                                @*
+                                    Dòng bị bỏ qua được tô ngay tại chỗ. Chỉ có một câu thông báo
+                                    ở đầu trang là bắt Admin đối chiếu bằng mắt giữa một đoạn văn
+                                    và 20 dòng bảng - việc mà máy làm được còn người thì làm sai.
+
+                                    table-danger cho sản phẩm đã bị XOÁ, table-warning cho sản
+                                    phẩm bị người khác SỬA: hai tình huống cần hai hành động khác
+                                    nhau (một cái tải lại trang, một cái bấm Lưu lần nữa).
+                                *@
+                                <tr class="@(xungDot is null ? "" : xungDot.DaBiXoa ? "table-danger" : "table-warning")">
+                                    <td class="ps-4">
+                                        @*
+                                            Id BẮT BUỘC có mặt: thiếu nó thì binder cho ra Id = 0
+                                            và dòng mất danh tính hoàn toàn.
+                                        *@
+                                        <input type="hidden" asp-for="Items[i].Id" />
+
+                                        @*
+                                            ★ RowVersion render Base64 THỦ CÔNG.
+
+                                            Đã ĐO chính xác điều kiện của cái bẫy, và nó tinh tế
+                                            hơn quy ước cũ mô tả:
+
+                                              <input type="hidden" asp-for="..."/>  -> Base64 ĐÚNG
+                                              <input asp-for="..."/>                -> "System.Byte[]"
+
+                                            Vì DefaultHtmlGenerator.GenerateHidden có nhánh riêng
+                                            mã hoá byte[] sang Base64, còn đường input thường thì
+                                            gọi ToString(). Tức chỉ cần ai đó bỏ type="hidden" đi
+                                            là concurrency biến mất trong im lặng.
+
+                                            Viết tay thì kết quả không phụ thuộc vào chi tiết đó.
+                                            Chiều ngược lại (POST) binder tự giải mã Base64 ->
+                                            byte[], nên chỉ chiều render mới phải làm tay.
+                                        *@
+                                        <input type="hidden" name="Items[@i].RowVersion"
+                                               value="@(Model.Items[i].RowVersion is null ? string.Empty : Convert.ToBase64String(Model.Items[i].RowVersion!))" />
+
+                                        @* Name có [BindNever] nên chỉ hiện ra, không có input nào. *@
+                                        <span class="fw-semibold text-dark" data-ten-san-pham>@Model.Items[i].Name</span>
+
+                                        @if (xungDot is not null)
+                                        {
+                                            <div class="small fw-semibold mt-1" data-xung-dot="@Model.Items[i].Id">
+                                                @if (xungDot.DaBiXoa)
+                                                {
+                                                    <span>&#9888; Đã bị xoá khỏi hệ thống. Tải lại trang để bảng khớp với dữ liệu thật.</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>&#9888; Bị bỏ qua - người khác vừa sửa dòng này.</span>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        @*
+                                            type="number" + step: theo chuẩn HTML, input number
+                                            luôn gửi giá trị ở dạng chuẩn hoá (dấu "." thập phân)
+                                            bất kể locale trình duyệt. Với type="text", người dùng
+                                            vi-VN gõ "1.000.000" thì model binding trả về 0 TRONG
+                                            IM LẶNG - không lỗi nào, chỉ là giá về 0.
+                                        *@
+                                        <div class="input-group input-group-sm">
+                                            <input asp-for="Items[i].Price" type="number"
+                                                   step="0.01" min="0.01" class="form-control text-end fw-semibold" />
+                                            <span class="input-group-text">đ</span>
+                                        </div>
+                                        <span asp-validation-for="Items[i].Price" class="text-danger small d-block"></span>
+
+                                        @*
+                                            Giá trị của NGƯỜI KIA, ngay cạnh ô nhập của mình. Đây
+                                            mới là thứ Admin cần để quyết định ghi đè hay không -
+                                            "có xung đột" một mình không trả lời được câu hỏi nào.
+                                        *@
+                                        @if (xungDot is { DaBiXoa: false })
+                                        {
+                                            <div class="small text-muted mt-1" data-gia-hien-tai="@Model.Items[i].Id">
+                                                Hiện tại: @xungDot.PriceHienTai.ToMoneyText() đ
+                                            </div>
+                                        }
+                                    </td>
+
+                                    <td class="pe-4">
+                                        <input asp-for="Items[i].Stock" type="number"
+                                               step="1" min="0" class="form-control form-control-sm text-end fw-semibold" />
+                                        <span asp-validation-for="Items[i].Stock" class="text-danger small d-block"></span>
+
+                                        @if (xungDot is { DaBiXoa: false })
+                                        {
+                                            <div class="small text-muted mt-1" data-ton-kho-hien-tai="@Model.Items[i].Id">
+                                                Hiện tại: @xungDot.StockHienTai
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card-footer bg-light p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span class="text-muted small">
+                    Trang <strong>@Model.Page</strong> / <strong>@Model.TongSoTrang</strong> &middot; Tổng số <strong>@Model.TongSoSanPham</strong> sản phẩm
+                </span>
+
+                <button type="submit" class="btn btn-primary fw-semibold px-4 shadow-sm">
+                    💾 Lưu tất cả thay đổi
+                </button>
+            </div>
+        </div>
+    </form>
+
+    @*
+        Phân trang nằm NGOÀI form: đây là các thẻ <a> điều hướng (GET), không phải dữ
+        liệu gửi lên. Đặt trong form cũng chạy, nhưng để ngoài thì rõ ràng hơn rằng bấm
+        sang trang khác là BỎ mọi thay đổi chưa lưu.
+    *@
+    <nav class="mt-3">
+        <ul class="pagination pagination-sm mb-0 justify-content-center">
+            <li class="page-item @(Model.CoTrangTruoc ? "" : "disabled")">
+                <a class="page-link px-3" asp-action="BulkEdit" asp-route-page="@(Model.Page - 1)">← Trước</a>
+            </li>
+            <li class="page-item @(Model.CoTrangSau ? "" : "disabled")">
+                <a class="page-link px-3" asp-action="BulkEdit" asp-route-page="@(Model.Page + 1)">Sau →</a>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="alert alert-warning border-warning border-opacity-25 d-flex align-items-center gap-2 mt-3 small">
+        <span>⚡</span>
+        <div>
+            Chuyển trang sẽ <strong>bỏ</strong> mọi thay đổi chưa lưu trên trang hiện tại.
+            Cả bảng được lưu trong <strong>một</strong> transaction: nếu có một sản phẩm
+            vừa bị người khác sửa thì <strong>không dòng nào</strong> được ghi.
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

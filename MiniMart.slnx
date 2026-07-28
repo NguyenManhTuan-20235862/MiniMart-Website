@@ -5,4 +5,5 @@
   <Project Path="MiniMart.Infrastructure/MiniMart.Infrastructure.csproj" />
   <Project Path="MiniMart.Tests/MiniMart.Tests.csproj" />
   <Project Path="MiniMart.Web/MiniMart.Web.csproj" />
+  <Project Path="scripts/SeedDuLieuMau/SeedDuLieuMau.csproj" />
 </Solution>

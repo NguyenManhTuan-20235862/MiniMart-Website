@@ -1,4 +1,8 @@
 @using MiniMart.Web
 @using MiniMart.Web.Areas.Admin.Models
 @using MiniMart.Domain.Entities
+@* MoneyFormat.ToMoneyText(): khoá InvariantCulture nên cùng một số ra cùng một chuỗi
+   bất kể locale máy chạy. Gọi thẳng ToString("N0") là máy en-US in "111,000" còn máy
+   vi-VN in "111.000". *@
+@using MiniMart.Web.Extensions
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers

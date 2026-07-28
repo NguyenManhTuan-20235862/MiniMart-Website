@@ -1,0 +1,29 @@
+# Kết thúc dòng phải do REPO quyết định, không do cấu hình git của từng máy.
+#
+# Vì sao file này tồn tại: `.editorconfig` khai `end_of_line = crlf`, và
+# `dotnet format --verify-no-changes` là một dạng test của dự án. Trước khi có file
+# này, cách checkout phụ thuộc `core.autocrlf` của từng máy:
+#
+#   Windows (core.autocrlf=true) -> checkout ra CRLF -> khớp .editorconfig -> XANH
+#   Linux   (mặc định false)     -> checkout ra LF   -> lệch .editorconfig -> ĐỎ
+#
+# Đúng kiểu "chạy tốt trên máy tôi": job `format` của CI đỏ ngay lần chạy đầu tiên
+# trong khi cùng lệnh đó xanh ở local. Không có gì trong code sai cả - cái sai là
+# hai môi trường nhìn thấy hai nội dung file khác nhau.
+#
+# `text=auto` để git tự nhận diện file văn bản và LUÔN lưu LF trong repo (chuẩn),
+# còn `eol=crlf` quyết định thứ được ghi ra thư mục làm việc trên MỌI hệ điều hành.
+* text=auto eol=crlf
+
+# File nhị phân: tuyệt đối không đụng vào. Thiếu dòng này thì git có thể nhận diện
+# nhầm một file ảnh là văn bản và "sửa" byte trong đó - hỏng file, không lỗi nào báo.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.dll binary
+*.exe binary

@@ -1,0 +1,245 @@
+@model CartTableViewModel
+@*
+    Bảng giỏ hàng. Dùng cho CẢ trang /Cart (server render) và response của
+    /Cart/Add, /Cart/UpdateQuantity, /Cart/Remove (AJAX) — đúng một khuôn markup.
+    Mọi form ở đây là POST và có antiforgery token, kể cả nút xoá.
+*@
+
+@if (Model.Notice is not null)
+{
+    <div class="alert alert-warning" role="alert">@Model.Notice</div>
+}
+
+@if (Model.Cart.IsEmpty)
+{
+    <div class="es-empty-state bg-white rounded-3 border p-5 text-center my-3">
+        <div class="es-empty-state-icon">🛒</div>
+        <h4 class="fw-bold mb-2">Giỏ hàng đang trống</h4>
+        <p class="text-muted mb-4">Bạn chưa có sản phẩm nào trong giỏ hàng. Hãy khám phá sản phẩm của chúng tôi!</p>
+        <a class="es-btn-filter d-inline-block text-decoration-none px-4 py-2" asp-controller="Home" asp-action="Index">
+            Xem sản phẩm
+        </a>
+    </div>
+}
+else
+{
+    @if (Model.Cart.HasStockProblem)
+    {
+        <div class="alert alert-danger mb-4">
+            Có sản phẩm trong giỏ vượt quá số lượng còn lại. Giỏ hàng không giữ hàng —
+            hãy điều chỉnh trước khi đặt hàng.
+        </div>
+    }
+
+    @if (Model.ChoPhepSua)
+    {
+        @* Layout 2 cột cho trang /Cart đầy đủ *@
+        <div class="row g-4">
+            @* Cột trái: Danh sách sản phẩm *@
+            <div class="col-lg-8">
+                <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+                    <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center border-bottom border-light">
+                        <h5 class="fw-bold text-dark mb-0" style="font-size: 1.1rem;">Sản phẩm trong giỏ</h5>
+                        <span class="text-secondary small">
+                            Tổng <span id="cartCount" class="fw-semibold text-dark">@Model.Cart.TotalQuantity</span> món
+                        </span>
+                    </div>
+
+                    <div class="p-0">
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead style="background-color: #F8FAFC;">
+                                    <tr class="text-secondary small font-semibold">
+                                        <th scope="col" class="ps-4 py-3 border-0" style="min-width: 220px;">Sản phẩm</th>
+                                        <th scope="col" class="py-3 text-center border-0" style="width: 140px;">Đơn giá</th>
+                                        <th scope="col" class="py-3 text-center border-0" style="width: 150px;">Số lượng</th>
+                                        <th scope="col" class="py-3 text-end border-0" style="width: 160px;">Thành tiền</th>
+                                        <th scope="col" class="pe-4 py-3 text-center border-0" style="width: 60px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var line in Model.Cart.Lines)
+                                    {
+                                        <tr class="border-bottom border-light">
+                                            <td class="ps-4 py-3">
+                                                <div class="d-flex align-items-center gap-3">
+                                                    <div class="rounded-3 border border-light p-1 flex-shrink-0 d-flex align-items-center justify-content-center" style="width: 64px; height: 64px; background-color: #F8FAFC;">
+                                                        @if (!string.IsNullOrEmpty(line.ImageUrl))
+                                                        {
+                                                            <img src="@line.ImageUrl" alt="@line.Name" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
+                                                        }
+                                                        else
+                                                        {
+                                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="1.5">
+                                                                <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/>
+                                                            </svg>
+                                                        }
+                                                    </div>
+                                                    <div>
+                                                        <h6 class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">@line.Name</h6>
+                                                        <div class="text-secondary small">SKU: ES-100@(line.ProductId)</div>
+                                                        @if (line.ExceedsStock)
+                                                        {
+                                                            <span class="badge bg-danger mt-1">Không đủ hàng</span>
+                                                        }
+                                                        else if (!line.InStock)
+                                                        {
+                                                            <span class="badge bg-secondary mt-1">Hết hàng</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <td class="text-center text-dark font-medium" style="font-size: 0.95rem;">
+                                                @line.UnitPrice.ToMoneyText() đ
+                                            </td>
+
+                                            <td class="text-center">
+                                                <form asp-controller="Cart" asp-action="UpdateQuantity" method="post" class="d-flex align-items-center justify-content-center">
+                                                    <input type="hidden" name="ProductId" value="@line.ProductId" />
+                                                    <div class="input-group input-group-sm es-cart-stepper rounded-3 border bg-white overflow-hidden" style="width: 110px;">
+                                                        <button type="submit" name="Quantity" value="@Math.Max(0, line.Quantity - 1)" class="btn btn-light border-0 px-2 py-1 text-secondary fw-bold" title="Giảm số lượng" @(line.Quantity <= 1 ? "disabled" : "")>&minus;</button>
+                                                        <input type="number" name="Quantity" value="@line.Quantity" min="0" max="100" class="form-control text-center border-0 fw-semibold px-0" aria-label="Số lượng @line.Name" style="font-size: 0.9rem;" />
+                                                        <button type="submit" name="Quantity" value="@(line.Quantity + 1)" class="btn btn-light border-0 px-2 py-1 text-secondary fw-bold" title="Tăng số lượng">&plus;</button>
+                                                    </div>
+                                                </form>
+                                            </td>
+
+                                            <td class="text-end fw-extrabold text-danger pe-2" style="font-size: 1.05rem; color: #DC2626 !important;">
+                                                @line.LineTotal.ToMoneyText() đ
+                                            </td>
+
+                                            <td class="pe-4 text-center">
+                                                <form asp-controller="Cart" asp-action="Remove" method="post" class="m-0">
+                                                    <input type="hidden" name="ProductId" value="@line.ProductId" />
+                                                    <button type="submit" class="btn btn-link text-secondary text-opacity-50 p-1 hover-danger border-0 bg-transparent" title="Xoá khỏi giỏ">
+                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                                        </svg>
+                                                        <span class="visually-hidden">Xoá</span>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @* Thanh hành động dưới bảng giỏ hàng giống hình 1 *@
+                <div class="d-flex justify-content-between align-items-center mt-3 px-1">
+                    <a asp-controller="Home" asp-action="Index" class="text-primary text-decoration-none fw-semibold d-flex align-items-center gap-2">
+                        <span class="fs-5">&larr;</span> Tiếp tục mua sắm
+                    </a>
+                    <button type="button" onclick="location.reload()" class="btn btn-link text-secondary text-decoration-none small d-flex align-items-center gap-1">
+                        <span class="fs-6">&#8635;</span> Cập nhật giỏ hàng
+                    </button>
+                </div>
+            </div>
+
+            @* Cột phải: Tóm tắt đơn hàng & Checkout *@
+            <div class="col-lg-4">
+                <div class="es-cart-summary-card">
+                    <h5 class="es-cart-summary-title">Tóm tắt đơn hàng</h5>
+
+                    <div class="d-flex justify-content-between mb-2 text-muted small">
+                        <span>Số lượng sản phẩm:</span>
+                        <span class="fw-semibold text-dark">@Model.Cart.TotalQuantity món</span>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-baseline my-3 pt-3 border-top">
+                        <span class="fw-bold text-dark">Tổng tiền:</span>
+                        <span class="es-cart-total-amount" style="color: #DC2626 !important;">
+                            @Model.Cart.TotalAmount.ToMoneyText()<small style="font-size:0.6em"> đ</small>
+                        </span>
+                    </div>
+
+                    <p class="text-muted small mb-4">
+                        💡 <em>Giá hiển thị là giá hiện tại, chốt lại vào thời điểm đặt hàng.</em>
+                    </p>
+
+                    <a class="es-btn-checkout btn btn-primary btn-lg w-100 text-white text-center text-decoration-none py-3 fw-bold rounded-3" style="background-color: #2563EB; border-color: #2563EB;"
+                       asp-controller="Checkout" asp-action="Index">
+                        Tiến hành đặt hàng →
+                    </a>
+
+                    @* Trust Perks *@
+                    <div class="es-cart-perks">
+                        <div class="es-cart-perk-item">
+                            <div class="es-cart-perk-icon">✓</div>
+                            <span>Giao hàng nhanh toàn quốc</span>
+                        </div>
+                        <div class="es-cart-perk-item">
+                            <div class="es-cart-perk-icon">🛡</div>
+                            <span>Bảo hành chính hãng 100%</span>
+                        </div>
+                        <div class="es-cart-perk-item">
+                            <div class="es-cart-perk-icon">↺</div>
+                            <span>Đổi trả dễ dàng trong 7 ngày</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* Đơn giản cho trang /Checkout (ChoPhepSua = false) *@
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead>
+                    <tr class="text-muted small">
+                        <th scope="col">Sản phẩm</th>
+                        <th scope="col" class="text-end">Đơn giá</th>
+                        <th scope="col" class="text-center" style="width: 90px;">Số lượng</th>
+                        <th scope="col" class="text-end">Thành tiền</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in Model.Cart.Lines)
+                    {
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    @if (!string.IsNullOrEmpty(line.ImageUrl))
+                                    {
+                                        <img src="@line.ImageUrl" alt="@line.Name"
+                                             style="width: 44px; height: 44px; object-fit: contain;" />
+                                    }
+                                    <div>
+                                        <div class="fw-semibold small">@line.Name</div>
+                                        @if (line.ExceedsStock)
+                                        {
+                                            <span class="badge bg-danger">Không đủ hàng</span>
+                                        }
+                                        else if (!line.InStock)
+                                        {
+                                            <span class="badge bg-secondary">Hết hàng</span>
+                                        }
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="text-end small">@line.UnitPrice.ToMoneyText() đ</td>
+                            <td class="text-center fw-semibold">@line.Quantity</td>
+                            <td class="text-end fw-bold text-danger small">@line.LineTotal.ToMoneyText() đ</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3" class="text-end fw-bold">Tổng cộng:</td>
+                        <td class="text-end fw-bold text-danger fs-6">
+                            @Model.Cart.TotalAmount.ToMoneyText() đ
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        <div class="text-muted small mt-2">
+            Tổng <span id="cartCount">@Model.Cart.TotalQuantity</span> món.
+            Giá hiển thị là giá hiện tại, chốt lại khi đặt hàng.
+        </div>
+    }
+}
