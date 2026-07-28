@@ -57,6 +57,7 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 
 | Viết thế này | Chuyện xảy ra |
 |---|---|
+| Hai phần tử cùng `name` trong MỘT form (nút submit mang `value` + ô nhập) | Trình duyệt gửi CẢ HAI, model binder cho `int` lấy giá trị **đầu tiên theo thứ tự DOM**. Nút `−` đứng trước ô nhập nên chạy, nút `+` đứng sau nên **không làm gì cả** — cùng một đoạn code, hai kết quả, không exception nào. Mỗi form phải chứa đúng MỘT phần tử cho mỗi tên |
 | `<form>` của bộ lọc bao luôn cả lưới sản phẩm | **Form lồng trong form.** Trình duyệt VỨT BỎ thẻ `<form>` bên trong, nút "Thêm vào giỏ" của thẻ ĐẦU TIÊN rơi vào form lọc (`get /`) → bấm chỉ chạy lại bộ lọc, không thêm gì vào giỏ. **Chuỗi HTML server gửi đi hoàn toàn đúng**, nên chỉ test chạy trong trình duyệt thật mới thấy |
 | Dropdown có nút bấm mà thiếu `data-bs-auto-close="outside"` | Mặc định Bootstrap đóng menu khi bấm **bên trong** → sập ngay lần bấm đầu, và nhánh JS `if (container.classList.contains('show'))` không bao giờ chạy nên dòng vừa xoá vẫn nằm lại DOM |
 | `ToString("N0")` thay `MoneyFormat.ToMoneyText()` | Máy en-US in `111,000`, máy vi-VN in `111.000` |

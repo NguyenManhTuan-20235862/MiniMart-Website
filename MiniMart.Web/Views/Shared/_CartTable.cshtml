@@ -95,14 +95,57 @@ else
                                             </td>
 
                                             <td class="text-center">
-                                                <form asp-controller="Cart" asp-action="UpdateQuantity" method="post" class="d-flex align-items-center justify-content-center">
-                                                    <input type="hidden" name="ProductId" value="@line.ProductId" />
+                                                @*
+                                                    ★ BA form RIÊNG BIỆT, không phải một form chứa cả ba nút.
+
+                                                    Bản trước gộp chung một form, và cả ba phần tử đều mang
+                                                    name="Quantity": nút −, ô nhập, nút +. Trình duyệt gửi
+                                                    lên CẢ ô nhập LẪN nút vừa bấm, còn model binder cho một
+                                                    tham số `int` thì lấy giá trị ĐẦU TIÊN theo thứ tự DOM:
+
+                                                      bấm −  ->  Quantity=1, Quantity=2  -> lấy 1  (đúng)
+                                                      bấm +  ->  Quantity=2, Quantity=3  -> lấy 2  (KHÔNG ĐỔI)
+
+                                                    Tức nút "+" không làm gì cả, còn nút "−" chạy đúng chỉ
+                                                    nhờ tình cờ nó nằm TRƯỚC ô nhập. Đo được trong Chromium
+                                                    thật: bấm "+" xong badge vẫn là 2.
+
+                                                    Tách ba form là cách sửa theo CẤU TRÚC: mỗi form biểu
+                                                    diễn đúng một ý định và chỉ chứa đúng một `Quantity`,
+                                                    nên không còn chỗ cho thứ tự DOM quyết định kết quả.
+                                                    Ba form là ANH EM chứ không lồng nhau — hợp lệ.
+                                                *@
+                                                <div class="d-flex align-items-center justify-content-center">
                                                     <div class="input-group input-group-sm es-cart-stepper rounded-3 border bg-white overflow-hidden" style="width: 110px;">
-                                                        <button type="submit" name="Quantity" value="@Math.Max(0, line.Quantity - 1)" class="btn btn-light border-0 px-2 py-1 text-secondary fw-bold" title="Giảm số lượng" @(line.Quantity <= 1 ? "disabled" : "")>&minus;</button>
-                                                        <input type="number" name="Quantity" value="@line.Quantity" min="0" max="100" class="form-control text-center border-0 fw-semibold px-0" aria-label="Số lượng @line.Name" style="font-size: 0.9rem;" />
-                                                        <button type="submit" name="Quantity" value="@(line.Quantity + 1)" class="btn btn-light border-0 px-2 py-1 text-secondary fw-bold" title="Tăng số lượng">&plus;</button>
+
+                                                        <form asp-controller="Cart" asp-action="UpdateQuantity" method="post" class="m-0 d-flex">
+                                                            <input type="hidden" name="ProductId" value="@line.ProductId" />
+                                                            @* Quantity = 0 được CartService dịch thành xoá dòng, nên
+                                                               nút này KHÔNG cần disabled ở số lượng 1: giảm từ 1
+                                                               xuống 0 là "bỏ món này", đúng ý người dùng. *@
+                                                            <button type="submit" name="Quantity" value="@Math.Max(0, line.Quantity - 1)"
+                                                                    class="btn btn-light border-0 px-2 py-1 text-secondary fw-bold rounded-0"
+                                                                    title="Giảm số lượng">&minus;</button>
+                                                        </form>
+
+                                                        <form asp-controller="Cart" asp-action="UpdateQuantity" method="post" class="m-0 flex-grow-1 d-flex">
+                                                            <input type="hidden" name="ProductId" value="@line.ProductId" />
+                                                            @* type="number": chuẩn HTML bắt input number luôn gửi giá
+                                                               trị ở dạng chuẩn hoá, không phụ thuộc locale trình duyệt. *@
+                                                            <input type="number" name="Quantity" value="@line.Quantity" min="0" max="100"
+                                                                   class="form-control text-center border-0 fw-semibold px-0 rounded-0"
+                                                                   aria-label="Số lượng @line.Name" style="font-size: 0.9rem;" />
+                                                        </form>
+
+                                                        <form asp-controller="Cart" asp-action="UpdateQuantity" method="post" class="m-0 d-flex">
+                                                            <input type="hidden" name="ProductId" value="@line.ProductId" />
+                                                            <button type="submit" name="Quantity" value="@(line.Quantity + 1)"
+                                                                    class="btn btn-light border-0 px-2 py-1 text-secondary fw-bold rounded-0"
+                                                                    title="Tăng số lượng">&plus;</button>
+                                                        </form>
+
                                                     </div>
-                                                </form>
+                                                </div>
                                             </td>
 
                                             <td class="text-end fw-extrabold text-danger pe-2" style="font-size: 1.05rem; color: #DC2626 !important;">
