@@ -128,8 +128,18 @@ build được, chạy được, và chỉ sai. Chi tiết + lý do nằm trong 
 - dotnet format --verify-no-changes   ← là một dạng test, phải sạch
 - dotnet run --project MiniMart.Web --launch-profile http
 - ./scripts/test-vnpay-ipn.ps1 -OrderId &lt;id&gt; -Reset   ← giả lập VNPay gọi IPN vào app đang chạy
+- dotnet run --project scripts/SeedDuLieuMau -- --xac-nhan   ← **XOÁ SẠCH** rồi nạp lại dữ liệu mẫu
 - dotnet ef migrations add <TenMigration> -p MiniMart.Infrastructure -s MiniMart.Web
 - dotnet ef database update -p MiniMart.Infrastructure -s MiniMart.Web
+
+`SeedDuLieuMau` giữ lại MỌI tài khoản `Role = Admin` và xoá phần còn lại, rồi nạp
+5 danh mục × 10 sản phẩm, 10 khách (`khach01`…`khach10` / `Khach@2026`), mỗi khách
+2–3 đơn, mỗi đơn 1–5 món. Thiếu `--xac-nhan` thì nó chỉ IN RA kế hoạch kèm chuỗi kết
+nối rồi thoát — chốt này có vì sai lầm đắt nhất của script loại này không phải chạy
+nhầm lúc mà là chạy đúng lúc trên **nhầm database**. Hạt ngẫu nhiên cố định nên chạy
+lại cho ra đúng bộ dữ liệu cũ. Nó nằm TRONG solution có chủ đích: script chạm mọi
+entity nên việc CI build nó là một phép kiểm nhất quán miễn phí — đổi tên một property
+mà quên script là lỗi build, không phải một script hỏng âm thầm.
 
 ## Lưu ý đặc biệt
 - Products.RowVersion dùng cho Optimistic Concurrency, không được xóa/sửa kiểu dữ liệu này khi generate code.
