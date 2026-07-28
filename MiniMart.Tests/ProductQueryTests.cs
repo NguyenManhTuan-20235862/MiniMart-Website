@@ -158,13 +158,31 @@ public class ProductQueryTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Trang_vuot_qua_pham_vi_tra_ve_rong_nhung_TotalCount_van_dung()
+    public async Task Trang_vuot_qua_pham_vi_roi_ve_TRANG_CUOI_va_TotalCount_van_dung()
     {
         var result = await DungRepositoryAsync(
             r => r.GetProductsAsync(categoryId: _categoryA, page: 99, pageSize: 2));
 
-        Assert.Empty(result.Items);
+        // ⚠ Test này TRƯỚC ĐÂY khẳng định `Assert.Empty(result.Items)`, và điều đó đã
+        // được đổi có chủ đích. Ghi lại lý do vì đổi một khẳng định đang xanh là việc
+        // phải giải trình được:
+        //
+        // Tên cũ ("trả về rỗng nhưng TotalCount vẫn đúng") mô tả hành vi QUAN SÁT ĐƯỢC
+        // chứ không bảo vệ nó — không có một dòng lý do nào kèm theo, khác hẳn
+        // `Page_khong_hop_le_bi_dua_ve_1` ngay bên dưới (có nêu rõ "OFFSET âm"). Tức nó
+        // ghi lại một tai nạn, không phải một quyết định.
+        //
+        // Và tai nạn đó có hậu quả thật, tìm ra bằng một lượt quét khu vực Admin:
+        // `/Admin/User?page=999` in ra "Hệ thống chưa có tài khoản khách hàng nào" khi
+        // đang có 11 tài khoản, còn `/Admin/Product/BulkEdit?page=999` in ra "Chưa có
+        // sản phẩm nào" khi kho có 50 — và vì bộ phân trang chỉ hiện khi có nhiều hơn
+        // một trang, trang rỗng KHÔNG có nó, nên người dùng rơi vào ngõ cụt.
+        //
+        // Phần thật sự đáng giá của test cũ là TotalCount, và nó được giữ nguyên.
+        Assert.Equal(3, result.Page);      // 5 sản phẩm, 2 mỗi trang -> trang cuối là 3
+        Assert.Single(result.Items);       // 5 = 2 + 2 + 1
         Assert.Equal(5, result.TotalCount);
+        Assert.False(result.HasNextPage);
     }
 
     [Theory]
