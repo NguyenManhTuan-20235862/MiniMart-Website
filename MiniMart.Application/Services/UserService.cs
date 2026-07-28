@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using MiniMart.Application.Interfaces;
+using MiniMart.Common;
 using MiniMart.Common.Exceptions;
 using MiniMart.Domain.Entities;
 using MiniMart.Domain.Interfaces;
@@ -117,5 +118,23 @@ public class UserService : IUserService
         }
 
         return user;
+    }
+
+    public async Task<PagedResult<User>> GetUsersAsync(
+        int page = 1,
+        int pageSize = 20,
+        string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedPage = Math.Max(1, page);
+        var normalizedPageSize = Math.Clamp(pageSize, 1, 100);
+
+        var items = await _userRepository.GetUsersAsync(
+            normalizedPage, normalizedPageSize, search, cancellationToken);
+
+        var totalItems = await _userRepository.CountUsersAsync(
+            search, cancellationToken);
+
+        return new PagedResult<User>(items, totalItems, normalizedPage, normalizedPageSize);
     }
 }

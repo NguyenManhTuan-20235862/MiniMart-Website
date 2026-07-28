@@ -39,4 +39,42 @@ public class UserRepository : IUserRepository
         await _context.Users.AddAsync(user, cancellationToken);
     }
 
+    public async Task<List<User>> GetUsersAsync(
+        int page = 1,
+        int pageSize = 20,
+        string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.Users.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(u => u.Username.Contains(search));
+        }
+
+        var normalizedPage = Math.Max(1, page);
+        var normalizedPageSize = Math.Clamp(pageSize, 1, 100);
+
+        return await query
+            .OrderByDescending(u => u.Role)
+            .ThenBy(u => u.Username)
+            .ThenBy(u => u.Id)
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<int> CountUsersAsync(
+        string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.Users.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(u => u.Username.Contains(search));
+        }
+
+        return await query.CountAsync(cancellationToken);
+    }
 }

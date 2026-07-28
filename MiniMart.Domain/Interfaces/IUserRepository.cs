@@ -14,5 +14,9 @@ public interface IUserRepository
 
     Task AddAsync(User user, CancellationToken cancellationToken = default);
 
+    Task<List<User>> GetUsersAsync(int page = 1, int pageSize = 20, string? search = null, CancellationToken cancellationToken = default);
+
+    Task<int> CountUsersAsync(string? search = null, CancellationToken cancellationToken = default);
+
     // Lưu thay đổi nằm ở IUnitOfWork - xem ghi chú trong interface đó.
 }

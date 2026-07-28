@@ -1,3 +1,4 @@
+using MiniMart.Common;
 using MiniMart.Domain.Entities;
 
 namespace MiniMart.Application.Interfaces;
@@ -17,5 +18,11 @@ public interface IUserService
     Task<User?> AuthenticateAsync(
         string username,
         string password,
+        CancellationToken cancellationToken = default);
+
+    Task<PagedResult<User>> GetUsersAsync(
+        int page = 1,
+        int pageSize = 20,
+        string? search = null,
         CancellationToken cancellationToken = default);
 }
