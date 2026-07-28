@@ -312,16 +312,10 @@ public class CartMergeTests : IAsyncLifetime
 
     private async Task<string> DangKyAsync(HttpClient client)
     {
-        var username = $"gg_{Guid.NewGuid():N}"[..16];
+        var username = TestAuthExtensions.SinhUsername("gg");
 
         _usernames.Add(username);
-
-        await client.PostFormAsync("/Account/Register", new()
-        {
-            ["Username"] = username,
-            ["Password"] = MatKhau,
-            ["ConfirmPassword"] = MatKhau
-        });
+        await client.DangKyAsync(username, MatKhau);
 
         return username;
     }

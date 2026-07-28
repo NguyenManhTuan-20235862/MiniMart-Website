@@ -1,13 +1,17 @@
 # MiniMart - ElectroShop
 
 ## Kiến trúc
-Controller → Service → Repository → EF Core/Dapper → SQL Server
+Controller → Service → Repository → EF Core → SQL Server
+
+(Dapper đã được **gỡ**: khai sẵn mà không dùng là một phụ thuộc phải nâng cấp và quét
+lỗ hổng để đổi lấy con số không. Quy ước dùng nó vẫn nằm ở `rules/data-access.md` cho
+lúc thật sự cần một truy vấn ĐỌC phức tạp.)
 
 ## Cấu trúc Solution
 - MiniMart.Web             : ASP.NET Core MVC (Controller, View, ViewModel), Composition Root
 - MiniMart.Application      : Service layer (IService + business logic)
 - MiniMart.Domain           : Entity, Repository interface (IRepository), IUnitOfWork
-- MiniMart.Infrastructure   : EF Core DbContext, Repository impl, UnitOfWork, Dapper
+- MiniMart.Infrastructure   : EF Core DbContext, Repository impl, UnitOfWork
 - MiniMart.Common           : Helper, Constants, Custom Exception
 - MiniMart.Tests            : xUnit + Moq (unit test) và WebApplicationFactory (integration test)
 
@@ -202,12 +206,18 @@ mà quên script là lỗi build, không phải một script hỏng âm thầm.
   (bị chặn bởi việc `vnp_TxnRef = OrderId` mà VNPay từ chối `TxnRef` đã dùng), **đối
   soát định kỳ** khi IPN mất hẳn, và `Order` **chưa lưu phương thức thanh toán**. Xem
   `.claude/rules/payments.md`.
-- **Bộ test có một nguồn flaky chưa xử lý tận gốc.** Mọi client `WebApplicationFactory`
-  có `RemoteIpAddress = null` nên **cả bộ test dùng chung một hạn mức rate limit** của
-  `POST /Account/Login`. Đã gặp 2 test đỏ ngẫu nhiên vì lý do này. Đã giảm nhẹ bằng
-  assertion tự tố giác trong helper đăng nhập, nhưng chưa sửa gốc — cách sạch là cho
-  mỗi test class một partition riêng (VD header `X-Forwarded-For` giả + đọc nó trong
-  limiter), hoặc tắt hẳn rate limit ở môi trường test trừ chính test rate limit.
+- ~~Bộ test dùng chung một hạn mức rate limit~~ → **KHÔNG CÓ THẬT, đã đo và bác bỏ.**
+  Mục này từng ghi rằng vì `RemoteIpAddress` luôn `null` trong `WebApplicationFactory`
+  nên cả bộ test chung một hạn mức. Sai: mỗi test class tạo `WebApplicationFactory`
+  riêng → **host riêng, DI container riêng, limiter riêng**, nên bảng partition cũng
+  tách rời — việc partition key đều là `"unknown"` không nối chúng lại với nhau. Đo
+  bằng hai factory cùng hạ hạn mức xuống 2: đốt sạch hạn mức của A rồi mới gọi B, kết
+  quả `A = [200,200,429,429]` còn `B = [200,200]`. Thêm nữa, `EnvironmentName` trong
+  test là `Development` nên hạn mức thật là **1000/phút** — một class phải đăng nhập
+  1000 lần trong một phút mới chạm tới. Những lần đỏ ngẫu nhiên đã bị quy sai cho nó;
+  nguyên nhân thật là bug Base64 `+`/`HtmlDecode` (xem `rules/testing.md`).
+  📌 Bài học quy trình: một món "nợ kỹ thuật" chưa từng được ĐO cũng là một giả thuyết,
+  và giả thuyết viết vào tài liệu thì đọc y hệt sự thật.
 - **Sửa hàng loạt vẫn all-or-nothing ở đúng MỘT trường hợp hiếm**: có người ghi vào
   khoảng vài mili giây giữa lệnh đọc và `SaveChanges`. Xung đột thông thường đã bỏ qua
   chọn lọc từng dòng. Chưa tự thử lại vì retry sạch đòi một `DbContext` mới — cùng lý do

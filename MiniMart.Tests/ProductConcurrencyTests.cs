@@ -287,66 +287,11 @@ public class ProductConcurrencyTests : IAsyncLifetime
 
     private async Task<HttpClient> TaoClientAdminAsync()
     {
-        var client = _factory.CreateClient(
-            new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-
-        var username = $"cc_{Guid.NewGuid():N}"[..16];
-        const string password = "MatKhau123";
+        var (client, username) = await _factory.TaoClientAdminAsync("cc");
 
         _usernames.Add(username);
 
-        await PostFormAsync(client, "/Account/Register", new()
-        {
-            ["Username"] = username,
-            ["Password"] = password,
-            ["ConfirmPassword"] = password
-        });
-
-        using (var scope = _factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<MiniMartDbContext>();
-            var user = await context.Users.SingleAsync(u => u.Username == username);
-            user.Role = UserRole.Admin;
-            await context.SaveChangesAsync();
-        }
-
-        // Đăng nhập LẠI sau khi nâng quyền: claims là ảnh chụp lúc đăng nhập.
-        var dangNhap = await PostFormAsync(client, "/Account/Login", new()
-        {
-            ["Username"] = username,
-            ["Password"] = password,
-            ["RememberMe"] = "false"
-        });
-
-        // ★ Khẳng định đăng nhập THÀNH CÔNG ngay tại đây, đừng để test tự phát hiện
-        // qua hệ quả.
-        //
-        // Lý do rất cụ thể: /Account/Login là endpoint DUY NHẤT có rate limit, và
-        // limiter phân vùng theo IP - mà mọi client của WebApplicationFactory đều có
-        // RemoteIpAddress = null, tức CẢ BỘ TEST dùng chung một hạn mức. Khi nó bị
-        // vượt, login trả 429, client không có cookie, request tới /Admin/... bị đá về
-        // trang đăng nhập, và test đỏ ở một assertion nói về Base64 RowVersion - không
-        // có manh mối nào chỉ về rate limit.
-        //
-        // Đã gặp thật: hai test ở file này đỏ trong một lần chạy toàn bộ rồi xanh lại
-        // ở lần sau, và xanh khi chạy riêng.
-        Assert.True(
-            dangNhap.StatusCode is HttpStatusCode.Found or HttpStatusCode.OK,
-            $"Đăng nhập thất bại với {(int)dangNhap.StatusCode}. "
-            + "429 nghĩa là bộ test đã vượt RateLimiting:LoginPermitLimit (dùng chung "
-            + "một hạn mức vì RemoteIpAddress luôn null trong WebApplicationFactory).");
-
         return client;
-    }
-
-    private static async Task<HttpResponseMessage> PostFormAsync(
-        HttpClient client, string path, Dictionary<string, string> fields)
-    {
-        var form = await client.GetStringAsync(path);
-        fields["__RequestVerificationToken"] =
-            Regex.Match(form, """name="__RequestVerificationToken"[^>]*value="([^"]+)""").Groups[1].Value;
-
-        return await client.PostAsync(path, new FormUrlEncodedContent(fields));
     }
 
     public async Task DisposeAsync()
