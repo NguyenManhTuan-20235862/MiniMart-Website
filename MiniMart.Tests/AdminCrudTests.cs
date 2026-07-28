@@ -30,32 +30,9 @@ public class AdminCrudTests : IAsyncLifetime
     /// </summary>
     private async Task<HttpClient> TaoClientAdminAsync()
     {
-        var client = CreateClient();
-        var username = $"adm_{Guid.NewGuid():N}"[..16];
-        const string password = "MatKhau123";
+        var (client, username) = await _factory.TaoClientAdminAsync("adm");
 
         _usernames.Add(username);
-        await PostFormAsync(client, "/Account/Register", new()
-        {
-            ["Username"] = username,
-            ["Password"] = password,
-            ["ConfirmPassword"] = password
-        });
-
-        using (var scope = _factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<MiniMartDbContext>();
-            var user = await context.Users.SingleAsync(u => u.Username == username);
-            user.Role = UserRole.Admin;
-            await context.SaveChangesAsync();
-        }
-
-        await PostFormAsync(client, "/Account/Login", new()
-        {
-            ["Username"] = username,
-            ["Password"] = password,
-            ["RememberMe"] = "false"
-        });
 
         return client;
     }

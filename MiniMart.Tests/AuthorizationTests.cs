@@ -116,30 +116,7 @@ public class AuthorizationTests : IAsyncLifetime
     {
         _usernamesToCleanUp.Add(username);
 
-        var form = await client.GetStringAsync("/Account/Register");
-        var token = LayAntiForgeryToken(form);
-
-        var response = await client.PostAsync("/Account/Register", new FormUrlEncodedContent(
-            new Dictionary<string, string>
-            {
-                ["Username"] = username,
-                ["Password"] = password,
-                ["ConfirmPassword"] = password,
-                ["__RequestVerificationToken"] = token
-            }));
-
-        // Đăng ký thành công thì redirect; 200 nghĩa là form hiện lại kèm lỗi.
-        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-    }
-
-    private static string LayAntiForgeryToken(string html)
-    {
-        var match = Regex.Match(
-            html,
-            """name="__RequestVerificationToken"[^>]*value="([^"]+)""");
-
-        Assert.True(match.Success, "Không tìm thấy antiforgery token trong form.");
-        return match.Groups[1].Value;
+        await client.DangKyAsync(username, password);
     }
 
     public async Task DisposeAsync()

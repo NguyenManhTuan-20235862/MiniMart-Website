@@ -165,10 +165,21 @@ Tiêu chí là **dữ liệu tạm hay bản ghi lịch sử**, không phải "c
 
 ## Vòng đời connection: vì sao EF Core không cần lo, còn Dapper thì có
 
-**Trạng thái hiện tại (đã rà soát): dự án CHƯA dùng Dapper ở đâu cả.** Package được khai
-báo sẵn ở `Directory.Packages.props` + `MiniMart.Infrastructure.csproj` nhưng không một
-file `.cs` nào `using Dapper`. Mục này viết trước để câu Dapper ĐẦU TIÊN không phải câu
-đi tìm quy ước.
+**Trạng thái hiện tại: dự án KHÔNG dùng Dapper, và package đã được GỠ.** Trước đây nó
+được khai sẵn ở `Directory.Packages.props` + `MiniMart.Infrastructure.csproj` mà không
+một file `.cs` nào `using Dapper` — tức một phụ thuộc phải khôi phục, phải quét lỗ hổng,
+phải nâng phiên bản, đổi lấy đúng con số không. "Để sẵn đó cho sau này" nghe vô hại
+nhưng nó là cách một dự án tích lũy những thứ không ai dám gỡ vì không ai chắc chúng có
+đang được dùng hay không.
+
+Mục này CỐ Ý ở lại. Nó không mô tả code đang có mà mô tả **cách dùng đúng** cho lúc câu
+Dapper đầu tiên xuất hiện — và bài học rò rỉ connection dưới đây là loại chỉ lộ ra dưới
+tải, tức đúng lúc đắt nhất để học lại từ đầu. Thêm lại package khi đó là hai dòng:
+
+```
+Directory.Packages.props        <PackageVersion Include="Dapper" Version="..." />
+MiniMart.Infrastructure.csproj  <PackageReference Include="Dapper" />
+```
 
 ### EF Core — không phải "DI dọn hộ", mà là hai cơ chế chồng lên nhau
 1. **EF tự mở và đóng connection quanh TỪNG câu lệnh.** `DbContext` không giữ connection

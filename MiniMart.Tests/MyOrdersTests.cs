@@ -317,24 +317,9 @@ public class MyOrdersTests : IAsyncLifetime
     /// </summary>
     private async Task<(HttpClient Client, int UserId)> DangKyAsync(string tienTo)
     {
-        var client = _factory.CreateClient(
-            new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        var (client, username) = await _factory.TaoClientKhachAsync(tienTo);
 
-        var username = $"{tienTo}_{Guid.NewGuid():N}"[..16];
-        const string password = "MatKhau123";
         _usernames.Add(username);
-
-        var response = await client.PostFormAsync("/Account/Register", new()
-        {
-            ["Username"] = username,
-            ["Password"] = password,
-            ["ConfirmPassword"] = password
-        });
-
-        // Tự tố giác ngay: đăng ký hỏng cũng trả 200 (render lại form), và test sẽ đỏ
-        // ở một assertion nói về IDOR mà không manh mối nào chỉ về đăng ký.
-        Assert.True(response.StatusCode is HttpStatusCode.Found,
-            $"Đăng ký thất bại với {(int)response.StatusCode}.");
 
         using var scope = _factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<MiniMartDbContext>();

@@ -129,11 +129,28 @@ public class UserService : IUserService
         var normalizedPage = Math.Max(1, page);
         var normalizedPageSize = Math.Clamp(pageSize, 1, 100);
 
-        var items = await _userRepository.GetUsersAsync(
-            normalizedPage, normalizedPageSize, search, cancellationToken);
-
+        // ★ ĐẾM TRƯỚC, lấy dữ liệu SAU — thứ tự này là một phần của lệnh sửa lỗi.
+        //
+        // Bản trước lấy dữ liệu trước rồi mới đếm, nên không có cách nào kẹp cận trên
+        // cho `page`: lúc dựng câu truy vấn thì chưa biết có bao nhiêu trang. Hệ quả là
+        // `?page=999` trả về danh sách RỖNG, view in ra "Hệ thống chưa có tài khoản
+        // khách hàng nào" (sai — có 11 tài khoản), và vì bộ phân trang chỉ hiện khi có
+        // nhiều hơn một trang nên người dùng rơi vào NGÕ CỤT, chỉ thoát được bằng cách
+        // tự sửa URL.
+        //
+        // Đảo thứ tự KHÔNG tốn thêm truy vấn nào: vẫn đúng hai lệnh như cũ.
         var totalItems = await _userRepository.CountUsersAsync(
             search, cancellationToken);
+
+        var totalPages = (int)Math.Ceiling(totalItems / (double)normalizedPageSize);
+
+        if (totalItems > 0 && normalizedPage > totalPages)
+        {
+            normalizedPage = totalPages;
+        }
+
+        var items = await _userRepository.GetUsersAsync(
+            normalizedPage, normalizedPageSize, search, cancellationToken);
 
         return new PagedResult<User>(items, totalItems, normalizedPage, normalizedPageSize);
     }

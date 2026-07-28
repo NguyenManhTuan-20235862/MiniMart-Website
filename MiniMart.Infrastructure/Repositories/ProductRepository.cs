@@ -62,6 +62,26 @@ public class ProductRepository : IProductRepository
         // Query thứ nhất: đếm tổng số bản ghi KHỚP BỘ LỌC (chưa phân trang).
         var totalCount = await query.CountAsync(cancellationToken);
 
+        // ★ Kẹp CẬN TRÊN, và phải làm SAU lệnh đếm vì trước đó chưa biết có bao nhiêu trang.
+        //
+        // Thiếu bước này thì `?page=999` cho ra một trang RỖNG, mà view không phân biệt
+        // được "trang này rỗng" với "chưa có sản phẩm nào" nên nó in ra câu thứ hai -
+        // sai sự thật khi trong kho có 50 sản phẩm. Tệ hơn: bộ phân trang chỉ hiện khi
+        // có nhiều hơn một trang, mà trang rỗng thì không có nó, nên người dùng rơi vào
+        // NGÕ CỤT và chỉ thoát được bằng cách tự sửa URL.
+        //
+        // Đặt ở đây chứ không ở view: view không nên biết cách sửa một tham số hỏng, và
+        // đặt ở Controller là mỗi Controller phải nhớ làm lại. Đúng tinh thần của lệnh
+        // kẹp `page < 1` ngay bên trên - chỉ là nửa còn thiếu của nó.
+        //
+        // KHÔNG tốn thêm round-trip nào: lệnh đếm vốn đã chạy trước lệnh lấy dữ liệu.
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        if (totalCount > 0 && page > totalPages)
+        {
+            page = totalPages;
+        }
+
         // Query thứ hai: lấy đúng một trang. Dùng lại cùng biến query - đó là
         // lợi ích của deferred execution.
         var items = await query

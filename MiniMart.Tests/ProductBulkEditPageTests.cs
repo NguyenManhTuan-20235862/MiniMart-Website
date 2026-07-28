@@ -269,43 +269,9 @@ public class ProductBulkEditPageTests : IAsyncLifetime
 
     private async Task<HttpClient> TaoClientAdminAsync()
     {
-        var client = _factory.CreateClient(
-            new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-
-        var username = $"be_{Guid.NewGuid():N}"[..16];
-        const string password = "MatKhau123";
+        var (client, username) = await _factory.TaoClientAdminAsync("be");
 
         _usernames.Add(username);
-
-        await client.PostFormAsync("/Account/Register", new()
-        {
-            ["Username"] = username,
-            ["Password"] = password,
-            ["ConfirmPassword"] = password
-        });
-
-        using (var scope = _factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<MiniMartDbContext>();
-            var user = await context.Users.SingleAsync(u => u.Username == username);
-            user.Role = UserRole.Admin;
-            await context.SaveChangesAsync();
-        }
-
-        // Đăng nhập LẠI sau khi nâng quyền: claims là ảnh chụp lúc đăng nhập.
-        var dangNhap = await client.PostFormAsync("/Account/Login", new()
-        {
-            ["Username"] = username,
-            ["Password"] = password,
-            ["RememberMe"] = "false"
-        });
-
-        // Khẳng định đăng nhập thành công ngay tại đây - 429 (vượt hạn mức rate limit
-        // dùng chung của cả bộ test) sẽ khiến mọi assertion phía dưới đỏ ở chỗ chẳng
-        // liên quan. Xem rules/testing.md.
-        Assert.True(
-            dangNhap.StatusCode is System.Net.HttpStatusCode.Found or System.Net.HttpStatusCode.OK,
-            $"Đăng nhập thất bại với {(int)dangNhap.StatusCode}.");
 
         return client;
     }

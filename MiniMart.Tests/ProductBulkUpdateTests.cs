@@ -494,53 +494,9 @@ public class ProductBulkUpdateTests : IAsyncLifetime
 
     private async Task<HttpClient> TaoClientAdminAsync()
     {
-        var client = _factory.CreateClient(
-            new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-
-        var username = $"bu_{Guid.NewGuid():N}"[..16];
-        const string password = "MatKhau123";
+        var (client, username) = await _factory.TaoClientAdminAsync("bu");
 
         _usernames.Add(username);
-
-        await client.PostFormAsync("/Account/Register", new()
-        {
-            ["Username"] = username,
-            ["Password"] = password,
-            ["ConfirmPassword"] = password
-        });
-
-        using (var scope = _factory.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<MiniMartDbContext>();
-            var user = await context.Users.SingleAsync(u => u.Username == username);
-            user.Role = UserRole.Admin;
-            await context.SaveChangesAsync();
-        }
-
-        // Đăng nhập LẠI sau khi nâng quyền: claims là ảnh chụp lúc đăng nhập.
-        var dangNhap = await client.PostFormAsync("/Account/Login", new()
-        {
-            ["Username"] = username,
-            ["Password"] = password,
-            ["RememberMe"] = "false"
-        });
-
-        // ★ Đòi ĐÚNG 302, không chấp nhận 200.
-        //
-        // Bản đầu của helper này (chép từ ProductBulkEditPageTests) chấp nhận cả
-        // `Found or OK`, và đó là một lỗ hổng thật: đăng nhập THẤT BẠI render lại trang
-        // đăng nhập với **200 OK**, nên helper cho qua, client không có cookie, POST tới
-        // /Admin bị đá về trang đăng nhập, và test đỏ ở một assertion nói về HTML của
-        // bảng. Đã gặp đúng một lần trong lúc chạy mutation - không tái hiện lại được,
-        // và đó chính là lý do phải đóng cửa này lại thay vì đi tìm nguyên nhân.
-        //
-        // Chỉ nhánh THÀNH CÔNG của AccountController.Login mới trả redirect
-        // (RedirectToLocal); mọi nhánh thất bại đều là View() = 200.
-        Assert.True(
-            dangNhap.StatusCode is HttpStatusCode.Found,
-            $"Đăng nhập không thành công: nhận {(int)dangNhap.StatusCode}, mong đợi 302. "
-            + "429 = vượt hạn mức rate limit dùng chung của cả bộ test; "
-            + "200 = sai thông tin đăng nhập hoặc ModelState hỏng. Xem rules/testing.md.");
 
         return client;
     }
