@@ -82,19 +82,59 @@
 
                         @* Thanh tìm kiếm Header giống hình 1 *@
                         <li class="nav-item d-none d-lg-block me-2">
-                            <form method="get" asp-area="" asp-controller="Home" asp-action="Index" class="position-relative">
+                            @*
+                                Vẫn là form GET thật: gõ xong bấm Enter là ra trang kết quả
+                                đầy đủ, KHÔNG cần JavaScript. Dropdown gợi ý bên dưới chỉ là
+                                lớp tăng cường - tắt JS thì mất gợi ý, không mất tìm kiếm.
+
+                                autocomplete="off" để trình duyệt không phủ lịch sử gõ của
+                                chính nó lên panel gợi ý.
+                            *@
+                            <form method="get" asp-area="" asp-controller="Home" asp-action="Index"
+                                  class="position-relative" data-tim-kiem
+                                  data-url-goi-y="@Url.Action("Suggest", "Product")">
                                 <input type="text" name="search" class="form-control rounded-pill pe-4 ps-3 py-1 bg-white text-dark border-0"
-                                       value="@tuKhoaTimKiem" maxlength="100" placeholder="Tìm kiếm sản phẩm..." style="font-size: 0.8rem; width: 200px;" />
+                                       value="@tuKhoaTimKiem" maxlength="100" placeholder="Tìm kiếm sản phẩm..."
+                                       autocomplete="off" role="combobox" aria-expanded="false"
+                                       aria-controls="bangGoiY" aria-autocomplete="list"
+                                       style="font-size: 0.8rem; width: 200px;" data-o-tim-kiem />
                                 <button type="submit" class="btn btn-sm text-muted position-absolute end-0 top-50 translate-middle-y me-2 p-0 border-0 bg-transparent" aria-label="Tìm kiếm">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                                 </button>
+
+                                @*
+                                    Panel LUÔN được server render, chỉ ẩn/hiện. Bọc nó trong
+                                    @if thì lần gõ đầu tiên không có node nào để JS đổ HTML
+                                    vào, và JS buộc phải tự tạo thẻ - đúng thứ quy ước cấm.
+                                *@
+                                <div id="bangGoiY" class="es-suggest-panel" role="listbox"
+                                     data-bang-goi-y hidden></div>
                             </form>
                         </li>
 
                         @* Giỏ hàng dropdown *@
                         <li class="nav-item dropdown">
+                            @*
+                                ★ data-bs-auto-close="outside" là BẮT BUỘC, không phải tuỳ chọn.
+
+                                Mặc định của Bootstrap là "true" = đóng khi bấm cả BÊN
+                                TRONG lẫn bên ngoài menu. Với một dropdown chỉ để xem thì
+                                đúng, nhưng dropdown này có nút +/−/xoá, nên mặc định đó
+                                làm menu sập ngay lần bấm đầu — không ai sửa được số lượng
+                                thành 3.
+
+                                Nó còn vô hiệu hoá một nhánh của cart-dropdown.js: nhánh
+                                dựng lại dropdown khi giỏ đổi CẤU TRÚC chỉ chạy khi
+                                `container.classList.contains('show')`. Menu vừa bị đóng thì
+                                điều kiện đó false, nên dòng vừa xoá vẫn nằm lại trong DOM.
+                                Đã đo trong Chromium thật: bấm "−" từ 1 về 0 mà vẫn còn 1
+                                phần tử [data-cart-line].
+
+                                "outside" giữ nguyên hành vi đóng khi bấm ra ngoài.
+                            *@
                             <a class="nav-link es-cart-link position-relative d-flex align-items-center gap-1" href="#" role="button"
-                               id="cartDropdownToggle" data-bs-toggle="dropdown" aria-expanded="false"
+                               id="cartDropdownToggle" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                               aria-expanded="false"
                                aria-label="Giỏ hàng">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
                                      viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -197,6 +237,7 @@
     <script src="~/js/site.js" asp-append-version="true"></script>
     @* Dropdown giỏ hàng có ở mọi trang nên script nạp ở layout, không ở section Scripts. *@
     <script src="~/js/cart-dropdown.js" asp-append-version="true"></script>
+    <script src="~/js/header-search.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

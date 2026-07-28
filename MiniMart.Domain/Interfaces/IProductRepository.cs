@@ -1,5 +1,6 @@
 using MiniMart.Common;
 using MiniMart.Domain.Entities;
+using MiniMart.Domain.ValueObjects;
 
 namespace MiniMart.Domain.Interfaces;
 
@@ -56,6 +57,35 @@ public interface IProductRepository
         int productId,
         int categoryId,
         int take = 4,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gợi ý cho ô tìm kiếm ở header: vài sản phẩm có tên CHỨA từ khoá, xếp theo mức
+    /// độ khớp giảm dần.
+    ///
+    /// <para>
+    /// Thứ tự xếp hạng — đây là phần "giống nhất lên trước", và nó là quy tắc nghiệp
+    /// vụ chứ không phải chi tiết truy vấn:
+    /// </para>
+    /// <list type="number">
+    /// <item>tên <b>bắt đầu bằng</b> từ khoá (gõ "iph" → "iPhone 16" trước);</item>
+    /// <item>một <b>từ</b> trong tên bắt đầu bằng từ khoá ("pro" → "MacBook Pro 14");</item>
+    /// <item>khớp ở giữa một từ.</item>
+    /// </list>
+    /// <para>
+    /// Đồng hạng thì <b>tên ngắn hơn lên trước</b>: từ khoá chiếm tỉ lệ lớn hơn trong
+    /// một tên ngắn, nên nó "giống" hơn theo cảm nhận của người gõ.
+    /// </para>
+    /// <para>
+    /// So sánh KHÔNG phân biệt dấu — người Việt gõ nhanh thường bỏ dấu, và collation
+    /// mặc định của database là <c>..._CI_AS</c> (phân biệt dấu) nên "chuot" trả về
+    /// rỗng dù shop đang bán "Chuột Logitech". Đã đo trực tiếp trên SQL Server.
+    /// </para>
+    /// </summary>
+    /// <param name="tuKhoa">Rỗng hoặc quá ngắn thì trả về danh sách rỗng, không phải toàn bộ kho.</param>
+    Task<List<ProductSuggestion>> SuggestAsync(
+        string? tuKhoa,
+        int take = 8,
         CancellationToken cancellationToken = default);
 
     /// <summary>

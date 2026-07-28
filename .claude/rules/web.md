@@ -338,3 +338,48 @@ Hệ quả về markup và test:
 - Trong luồng sửa, `imageUrl = null` nghĩa là **giữ ảnh cũ**, không phải xoá ảnh.
 - Thứ tự ghi/xoá: lưu file TRƯỚC khi gọi Service (lỗi thì chỉ dư file rác),
   nhưng xoá file SAU khi DB xoá xong (lỗi thì bản ghi vẫn còn ảnh).
+
+## Nút +/− và ô nhập trong cùng một ô bảng: BA form, không phải một
+
+Bảng giỏ hàng có ba cách đổi số lượng — bấm `−`, gõ số, bấm `+` — và cả ba cùng gửi
+`Quantity`. Gộp chúng vào **một** `<form>` là một cái bẫy im lặng đã xảy ra thật.
+
+```html
+<!-- SAI: ba phần tử cùng name trong một form -->
+<form asp-action="UpdateQuantity">
+  <button type="submit" name="Quantity" value="@(q-1)">−</button>
+  <input  type="number" name="Quantity" value="@q" />
+  <button type="submit" name="Quantity" value="@(q+1)">+</button>
+</form>
+```
+
+Trình duyệt gửi lên **cả ô nhập lẫn nút vừa bấm**, còn model binder cho một tham số
+`int` lấy giá trị **ĐẦU TIÊN theo thứ tự DOM**:
+
+| Bấm | Form gửi đi | Binder lấy | Kết quả |
+|---|---|---|---|
+| `−` | `Quantity=1`, `Quantity=2` | **1** | đúng |
+| `+` | `Quantity=2`, `Quantity=3` | **2** | **không đổi** |
+
+Nút `−` chạy đúng chỉ vì nó **tình cờ** nằm trước ô nhập. Không có exception, HTTP 302
+như thường, và chuỗi HTML server gửi đi hoàn toàn hợp lệ — chỉ là nút "+" bấm mãi không
+lên. Đo được trong Chromium thật: badge đứng yên ở 2.
+
+**Cách sửa là CẤU TRÚC, không phải thứ tự**: tách ba `<form>` anh em (không lồng nhau),
+mỗi form chứa đúng một `Quantity`. Đảo thứ tự DOM chỉ chuyển lỗi từ nút này sang nút kia.
+
+- Có **test cấu trúc** khoá điều này (`Moi_form_so_luong_chi_duoc_chua_DUNG_MOT_o_ten_Quantity`):
+  test hành vi chứng minh hôm nay đúng, test cấu trúc tố giác lúc có người gộp lại "cho gọn".
+- Nút `−` ở số lượng 1 **không** đặt `disabled`: `Quantity = 0` được `CartService` dịch
+  thành xoá dòng, và giảm từ 1 xuống 0 đúng là điều người dùng muốn. Khoá nút là bỏ mất
+  đường đó mà chẳng bảo vệ điều gì.
+
+### Test trình duyệt chậm là test FLAKY
+
+Bản đầu của `CartPageBrowserTests` đạt số lượng mong muốn bằng cách lặp lại "mở trang chủ
+→ bấm Thêm vào giỏ" N lần, mỗi lần chờ `NetworkIdle` (im lặng 500ms). Một test cần số
+lượng 3 tốn **6 lần điều hướng**; cả class mất **2 phút 46**, và khi bốn class Playwright
+chạy song song thì có test vượt ngưỡng 30s rồi **đỏ ngẫu nhiên** — xanh khi chạy riêng.
+
+Sửa bằng cách đặt số lượng qua ô nhập (một lần điều hướng) và dùng `LoadState.Load` thay
+`NetworkIdle` cho trang không có JavaScript: **2m46 → 35s**, hết flaky.

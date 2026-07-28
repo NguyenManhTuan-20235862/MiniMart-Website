@@ -16,14 +16,33 @@
     <div asp-validation-summary="All" class="alert alert-warning mb-4"></div>
 }
 
-<form method="get" asp-action="Index" id="filterForm">
-    @if (!string.IsNullOrWhiteSpace(Model.Filter.Search))
-    {
-        <input type="hidden" name="search" value="@Model.Filter.Search" />
-    }
-    <div class="row g-4">
-        @* Cột trái Sidebar: Bộ lọc & Danh mục giống hình 1 *@
-        <div class="col-lg-3 col-md-4">
+@*
+    ★ <form> CHỈ được bao quanh SIDEBAR BỘ LỌC, tuyệt đối không bao cả lưới sản phẩm.
+
+    Trước đây nó mở ở đây và đóng tận cuối trang, tức bao trọn cả cột sản phẩm. Mỗi thẻ
+    sản phẩm lại chứa <form> "Thêm vào giỏ" của riêng nó, nên đó là FORM LỒNG TRONG FORM
+    — HTML không hợp lệ. Trình duyệt xử lý bằng cách VỨT BỎ thẻ <form> bên trong và giữ
+    lại phần tử con, còn thẻ </form> của nó thì đóng luôn form NGOÀI.
+
+    Hậu quả đo được trong Chromium thật:
+      - form[data-cart-add] của thẻ ĐẦU TIÊN biến mất khỏi DOM;
+      - nút "Thêm vào giỏ" của thẻ đó rơi vào form lọc (method=get action=/), nên bấm
+        vào chỉ chạy lại bộ lọc, KHÔNG thêm gì vào giỏ;
+      - cart-dropdown.js gọi closest('form[data-cart-add]') và nhận null nên im lặng
+        không chạy.
+
+    ⚠ Điều khiến lỗi này sống sót qua 591 test: chuỗi HTML mà SERVER gửi đi hoàn toàn
+    đúng — `data-cart-add` có mặt đủ. Sai lầm nằm ở bộ phân tích HTML của trình duyệt,
+    thứ mà chỉ test chạy trong trình duyệt thật mới nhìn thấy.
+*@
+<div class="row g-4">
+    @* Cột trái Sidebar: Bộ lọc & Danh mục *@
+    <div class="col-lg-3 col-md-4">
+        <form method="get" asp-action="Index" id="filterForm">
+            @if (!string.IsNullOrWhiteSpace(Model.Filter.Search))
+            {
+                <input type="hidden" name="search" value="@Model.Filter.Search" />
+            }
             <div class="d-flex flex-column gap-4">
 
                 @* Card 1: Danh mục *@
@@ -100,10 +119,11 @@
                 </div>
 
             </div>
-        </div>
+        </form>
+    </div>
 
-        @* Cột phải Main: Danh sách sản phẩm *@
-        <div class="col-lg-9 col-md-8">
+    @* Cột phải Main: Danh sách sản phẩm — NGOÀI form lọc, xem ghi chú ở đầu file *@
+    <div class="col-lg-9 col-md-8">
 
             @if (Model.Products.TotalCount == 0)
             {
@@ -150,9 +170,8 @@
                 }
             }
 
-        </div>
     </div>
-</form>
+</div>
 
 @section Scripts {
     <script src="~/js/home-load-more.js" asp-append-version="true"></script>

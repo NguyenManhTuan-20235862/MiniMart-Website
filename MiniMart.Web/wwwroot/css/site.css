@@ -809,6 +809,8 @@ body {
     border-right: 1px solid var(--es-border);
     min-height: calc(100vh - 64px);
     padding: 1.25rem 0.75rem;
+    width: 220px;
+    flex-shrink: 0;
 }
 
 .es-admin-nav-label {
@@ -833,6 +835,7 @@ body {
     text-decoration: none;
     transition: all var(--es-transition);
     margin-bottom: 0.25rem;
+    white-space: nowrap;
 }
 
 .es-admin-nav-item:hover {
@@ -944,4 +947,56 @@ body {
     width: auto;
     padding: 0.6rem 2rem;
     font-size: 0.95rem;
-}
+}
+/* ============================================================
+   HEADER SEARCH — panel gợi ý
+   ============================================================ */
+.es-suggest-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    /* Rộng hơn ô nhập (200px) vì tên sản phẩm dài; ô nhập hẹp là để vừa navbar. */
+    width: 340px;
+    max-height: 380px;
+    overflow-y: auto;
+    background: var(--es-surface);
+    border: 1px solid var(--es-border);
+    border-radius: var(--es-radius-sm);
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.18);
+    /* Trên navbar (z-index 1030 của Bootstrap) nên phải cao hơn. */
+    z-index: 1040;
+}
+
+.es-suggest-item {
+    border-bottom: 1px solid var(--es-border);
+    transition: background var(--es-transition);
+}
+
+.es-suggest-item:last-child {
+    border-bottom: none;
+}
+
+/* Cùng một kiểu cho di chuột VÀ cho phím mũi tên: hai cách chọn thì chỉ nên có một
+   cách hiển thị, nếu không người dùng bàn phím không biết mình đang ở đâu. */
+.es-suggest-item:hover,
+.es-suggest-item.es-suggest-active {
+    background: #F1F5F9;
+}
+
+.es-suggest-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    background: #F3F4F8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.es-suggest-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 2px;
+}

@@ -123,3 +123,50 @@
 - Bài học phụ thuộc DỮ LIỆU phải được khoá bằng test **tự cấp dữ liệu**, không phải bằng
   test đọc dữ liệu thật. Ba test đọc HTML thật chỉ chạm vào bug này khi may rủi;
   `Helper_doc_value_phai_giai_ma_thuc_the_HTML` dựng thẳng chuỗi `&#x2B;` nên tất định.
+
+## Test chạy trong TRÌNH DUYỆT THẬT (Playwright)
+
+Đọc trước khi sửa `PlaywrightTestBase`, `KestrelWebFactory`, hoặc bất kỳ test nào có
+đuôi `BrowserTests`.
+
+- Chọn **`Microsoft.Playwright` (bản .NET)** chứ không `@playwright/test` của Node: giữ
+  được MỘT lệnh `dotnet test` cho cả bộ, dùng chung helper đăng nhập và khuôn dọn dữ
+  liệu đã có, không thêm hệ sinh thái thứ hai vào CI. Đánh đổi đã biết: mất trace viewer.
+- Package **không tự tải trình duyệt**. Máy mới chạy một lần:
+  `pwsh MiniMart.Tests/bin/Debug/net10.0/playwright.ps1 install chromium`. CI có bước
+  riêng kèm `--with-deps`. `PlaywrightTestBase` bắt lỗi thiếu trình duyệt và ném lại kèm
+  **đúng câu lệnh cần chạy** — cùng quy ước với `VnPayOptionsValidator`.
+- `WebApplicationFactory` mặc định chạy trên `TestServer`, **không có cổng HTTP** nên
+  trình duyệt không vào được. `KestrelWebFactory` dựng **hai** host trên cùng cấu hình:
+  một `TestServer` cho lớp cơ sở, một Kestrel thật cho trình duyệt. Thứ tự trong
+  `CreateHost` không đảo được — đọc comment trong file đó trước khi sửa.
+- Cổng phải là **0** (hệ điều hành tự chọn). Đóng cứng một cổng là test đổ khi chạy song
+  song hoặc khi máy đang có thứ khác chiếm cổng.
+- `ViewportSize` phải **cố định**. Layout Bootstrap đổi theo breakpoint, để trình duyệt
+  tự chọn là mở đường cho test đỏ tuỳ máy.
+
+### ★ Vì sao phải có lớp test này: nó thấy thứ mà 591 test kia không thấy
+
+Ngay lần chạy đầu tiên, Playwright tìm ra **hai lỗi thật** đã sống qua toàn bộ bộ test cũ:
+
+| Lỗi | Vì sao test cũ không thấy |
+|---|---|
+| `<form>` bộ lọc bao cả lưới sản phẩm → form lồng nhau → nút "Thêm vào giỏ" của thẻ đầu tiên rơi vào form lọc | Chuỗi HTML **server gửi đi hoàn toàn đúng**; sai lầm nằm ở bộ phân tích HTML của trình duyệt |
+| Thiếu `data-bs-auto-close="outside"` → dropdown sập ngay lần bấm đầu | Không có Bootstrap thì không có sự kiện `show.bs.dropdown` để mà sai |
+
+Bài học tổng quát: **integration test khẳng định trên CHUỖI server sinh ra, không phải
+trên CÂY DOM trình duyệt dựng lên.** Hai thứ đó khác nhau đúng ở chỗ HTML không hợp lệ —
+và trình duyệt không báo lỗi, nó lặng lẽ sửa cây theo cách của nó.
+
+### Viết assertion cho trình duyệt
+- Dùng `#grid > .col` (con TRỰC TIẾP) chứ không `.col`. Đây không phải chi tiết thẩm mỹ:
+  `insertAdjacentHTML('afterend')` đặt thẻ thành ANH EM của lưới, trang vẫn hiện đủ sản
+  phẩm, và đếm bằng `.col` trần vẫn ra đúng số → test xanh vô nghĩa. Đã mutation: đổi
+  `beforeend` → `afterend` làm **5 test đỏ** nhờ dấu `>`.
+- Test cờ chặn double-click **không được dùng `ClickAsync` hai lần**: Playwright tự đợi
+  nút hết `disabled`, mà `disabled = true` chính là nửa còn lại của cơ chế đang muốn
+  kiểm. Dùng `dispatchEvent` hai lần liên tiếp.
+- Locator quét cả trang sẽ khớp cả **dropdown giỏ hàng trên navbar** (đang ẩn). Bóc vùng
+  trước (`.es-main-wrapper >> text=...`) rồi mới assert — `.First` không cứu được vì nó
+  có thể chọn đúng phần tử vô hình đó.
+- Giả lập lỗi server bằng `Page.RouteAsync` + `FulfillAsync(500)`, không cần sửa code.

@@ -4,6 +4,7 @@ using MiniMart.Common;
 using MiniMart.Common.Exceptions;
 using MiniMart.Domain.Entities;
 using MiniMart.Domain.Interfaces;
+using MiniMart.Domain.ValueObjects;
 
 namespace MiniMart.Application.Services;
 
@@ -49,6 +50,12 @@ public class ProductService : IProductService
 
     public Task<Product?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
         _productRepository.GetByIdAsync(id, cancellationToken);
+
+    public Task<List<ProductSuggestion>> SuggestAsync(
+        string? tuKhoa,
+        int take = 8,
+        CancellationToken cancellationToken = default) =>
+        _productRepository.SuggestAsync(tuKhoa, take, cancellationToken);
 
     public Task<List<Product>> GetRelatedAsync(
         int productId,

@@ -115,6 +115,19 @@ jobs:
           dotnet ef database update \
             -p MiniMart.Infrastructure -s MiniMart.Web --no-build --configuration Release
 
+      # Package Microsoft.Playwright KHÔNG tự tải trình duyệt về — nó chỉ đặt sẵn
+      # script playwright.ps1 vào thư mục output. Thiếu bước này thì mọi test chạy
+      # trong trình duyệt đỏ với "Executable doesn't exist".
+      #
+      # --with-deps cài luôn các thư viện hệ thống mà Chromium cần trên Ubuntu
+      # (libnss3, libatk...). Trên máy dev Windows thì không cần, nên câu lệnh ở
+      # CLAUDE.md không có cờ này.
+      #
+      # Chỉ cài `chromium`: một engine là đủ để kiểm JavaScript của dự án, còn tải
+      # cả ba engine thì tốn thêm vài trăm MB mỗi lần chạy CI.
+      - name: Cài trình duyệt cho Playwright
+        run: pwsh MiniMart.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+
       - name: Test
         run: >-
           dotnet test --no-build --configuration Release
